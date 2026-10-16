@@ -1,2 +1,0 @@
-# BuildAI
-AI agent
