@@ -103,6 +103,8 @@ class MainActivity : Activity() {
             textSize = 16f
             setTypeface(typeface, Typeface.BOLD)
         })
+        root.addView(button("🔊 TTS টেস্ট (আওয়াজ আসছে?)") { testTts() })
+        root.addView(button("TTS সেটিংস খুলুন (ইঞ্জিন/ভয়েজ ডেটা)") { openTtsSettings() })
         root.addView(button("🎤 কথা বলো (wake word ছাড়াই পুরো ধারা)") { talkNow() })
         root.addView(button("STT টেস্ট (শুধু বাক্য চেনা)") { runSttTest() })
 
@@ -219,6 +221,28 @@ class MainActivity : Activity() {
         val lang = currentLang()
         val result = CommandPipeline.run(ActionContext(this, lang), text)
         ensureSpeaker(lang).speak(result.message) { }
+    }
+
+    /** Speaks a fixed sentence. Always re-creates the speaker, so it picks up a newly chosen engine/voice. */
+    private fun testTts() {
+        saveSettings()
+        val lang = currentLang()
+        speaker?.shutdown()
+        speaker = null
+        val sentence = if (lang.startsWith("bn")) "হ্যালো, আমি বিল্ডএক্স" else "Hello, I am BuildX"
+        ensureSpeaker(lang).speak(sentence) { }
+    }
+
+    private fun openTtsSettings() {
+        try {
+            startActivity(Intent("com.android.settings.TTS_SETTINGS"))
+        } catch (e: Exception) {
+            LogStore.add(this, "TTS সেটিংস সরাসরি খোলা যায়নি; Settings > General management > Text-to-speech খুঁজুন")
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun ensureSpeaker(lang: String): Speaker {

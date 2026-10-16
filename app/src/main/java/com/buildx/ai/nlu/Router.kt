@@ -4,15 +4,23 @@ import com.buildx.ai.LogStore
 import com.buildx.ai.actions.ActionContext
 import com.buildx.ai.actions.ActionRegistry
 import com.buildx.ai.actions.ActionResult
+import java.text.Normalizer
 
 /** Placeholder router: two keyword rules. Phase 2 replaces this with the real normalizer + parser. */
 object SimpleRouter {
     data class Route(val actionName: String, val params: Map<String, String>)
 
-    private val timeWords = listOf("সময়", "কয়টা", "কটা", "টাইম", "time")
+    /**
+     * The same Bengali letter can be stored in different Unicode forms (e.g. "য়" as one character
+     * or as "য" + nukta). Keyboards and the speech engine do not always agree, so both the input
+     * and the keywords are normalized to NFC before comparing.
+     */
+    private fun norm(s: String): String = Normalizer.normalize(s, Normalizer.Form.NFC).lowercase().trim()
+
+    private val timeWords = listOf("সময়", "কয়টা", "কটা", "টাইম", "time").map { norm(it) }
 
     fun route(text: String): Route {
-        val t = text.trim().lowercase()
+        val t = norm(text)
         return if (timeWords.any { t.contains(it) }) {
             Route("time", emptyMap())
         } else {

@@ -11,6 +11,9 @@ import java.util.Locale
 /**
  * Text-to-speech with a completion callback (so the wake word is only resumed after speech ends,
  * otherwise the mic would hear our own voice). Use from the main thread only.
+ *
+ * Samsung's own engine (com.samsung.SMT) has no Bengali, so Google's engine is tried first,
+ * then the phone's default engine. For each engine: bn-BD, then bn-IN, then plain bn.
  */
 class Speaker(private val ctx: Context) {
     private val main = Handler(Looper.getMainLooper())
@@ -21,40 +24,99 @@ class Speaker(private val ctx: Context) {
     private val callbacks = HashMap<String, () -> Unit>()
     private val pending = ArrayList<Pair<String, () -> Unit>>()
 
+    // null = the phone's default engine
+    private val engines: List<String?> = listOf("com.google.android.tts", null)
+
     fun init(langTag: String, onReady: () -> Unit = {}) {
-        tts = TextToSpeech(ctx.applicationContext) { status ->
-            main.post { onInit(status, langTag, onReady) }
-        }
+        val tags = if (langTag.startsWith("bn")) listOf(langTag, "bn-IN", "bn") else listOf(langTag)
+        tryEngine(0, tags, onReady)
     }
 
-    private fun onInit(status: Int, langTag: String, onReady: () -> Unit) {
-        val t = tts
-        if (status == TextToSpeech.SUCCESS && t != null) {
-            val r = t.setLanguage(Locale.forLanguageTag(langTag))
-            ready = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED
-            LogStore.add(ctx, "TTS: lang=$langTag result=$r ready=$ready engine=${t.defaultEngine}")
-            t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-
-                override fun onDone(utteranceId: String?) {
-                    fire(utteranceId)
-                }
-
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) {
-                    fire(utteranceId)
-                }
-
-                override fun onError(utteranceId: String?, errorCode: Int) {
-                    LogStore.add(ctx, "TTS error code=$errorCode")
-                    fire(utteranceId)
-                }
-            })
-        } else {
-            LogStore.add(ctx, "TTS: init ব্যর্থ (status=$status)")
+    private fun tryEngine(index: Int, tags: List<String>, onReady: () -> Unit) {
+        if (index >= engines.size) {
+            finishInit(false, onReady)
+            return
         }
-        initDone = true
+        val engine = engines[index]
+        val name = engine ?: "default"
+        var created: TextToSpeech? = null
+        created = TextToSpeech(
+            ctx.applicationContext,
+            TextToSpeech.OnInitListener { status ->
+                main.post { onEngineInit(created, status, name, index, tags, onReady) }
+            },
+            engine
+        )
+    }
 
+    private fun onEngineInit(
+        t: TextToSpeech?,
+        status: Int,
+        name: String,
+        index: Int,
+        tags: List<String>,
+        onReady: () -> Unit
+    ) {
+        if (status != TextToSpeech.SUCCESS || t == null) {
+            LogStore.add(ctx, "TTS[$name]: init ব্যর্থ (status=$status)")
+            try {
+                t?.shutdown()
+            } catch (_: Exception) {
+            }
+            tryEngine(index + 1, tags, onReady)
+            return
+        }
+
+        for (tag in tags) {
+            val locale = Locale.forLanguageTag(tag)
+            val avail = t.isLanguageAvailable(locale)
+            LogStore.add(ctx, "TTS[$name]: $tag available=$avail")
+            if (avail >= TextToSpeech.LANG_AVAILABLE) {
+                t.setLanguage(locale)
+                attach(t)
+                LogStore.add(ctx, "TTS: ব্যবহার হচ্ছে engine=$name lang=$tag")
+                finishInit(true, onReady)
+                return
+            }
+        }
+
+        try {
+            t.shutdown()
+        } catch (_: Exception) {
+        }
+        tryEngine(index + 1, tags, onReady)
+    }
+
+    private fun attach(t: TextToSpeech) {
+        tts = t
+        t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+
+            override fun onDone(utteranceId: String?) {
+                fire(utteranceId)
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                fire(utteranceId)
+            }
+
+            override fun onError(utteranceId: String?, errorCode: Int) {
+                LogStore.add(ctx, "TTS error code=$errorCode")
+                fire(utteranceId)
+            }
+        })
+    }
+
+    private fun finishInit(ok: Boolean, onReady: () -> Unit) {
+        ready = ok
+        initDone = true
+        if (!ok) {
+            LogStore.add(
+                ctx,
+                "TTS: কোনো ইঞ্জিনে এই ভাষা নেই। Settings > TTS > Google ইঞ্জিন > Install voice data > বাংলা (বাংলাদেশ)"
+            )
+        }
         val queued = ArrayList(pending)
         pending.clear()
         queued.forEach { (text, cb) -> speak(text, cb) }
