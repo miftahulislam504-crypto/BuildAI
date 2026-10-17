@@ -25,7 +25,9 @@ object LogStore {
     fun add(ctx: Context, msg: String) {
         val line = "${fmt.format(Date())} $msg\n"
         try {
-            File(ctx.filesDir, "phase0.log").appendText(line)
+            val f = File(ctx.filesDir, "phase0.log")
+            if (f.length() > 200_000) f.writeText(f.readText().takeLast(100_000).substringAfter('\n')) // keep the log small
+            f.appendText(line)
         } catch (_: Exception) {
         }
         listener?.invoke()

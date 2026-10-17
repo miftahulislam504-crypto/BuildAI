@@ -20,11 +20,14 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.service.quicksettings.TileService
+import com.buildx.ai.call.CallTracker
+import com.buildx.ai.call.CallWatcher
 import com.buildx.ai.voice.Conversation
 import com.buildx.ai.voice.Speaker
 import com.buildx.ai.wake.ModelManager
 import com.buildx.ai.wake.VoskWakeEngine
 import com.buildx.ai.wake.WakeEngine
+import com.buildx.ai.wake.WakeSensitivity
 
 /**
  * Flow: wake word -> vibrate -> Conversation (prompt, STT, command, spoken result) -> resume wake word.
@@ -52,6 +55,8 @@ class WakeService : Service() {
     private var commands = 0
     private var startedAt = 0L
     private var lang = "bn-BD"
+    private var callWatcher: CallWatcher? = null
+    private var callActive = false
 
     private val batteryTick = object : Runnable {
         override fun run() {
@@ -78,6 +83,16 @@ class WakeService : Service() {
         lang = prefs.getString("lang", "bn-BD") ?: "bn-BD"
         val useWakeLock = prefs.getBoolean("wakeLock", true)
 
+        // If the last run never reached onDestroy, the phone (or a crash) killed the service.
+        if (prefs.getBoolean("svcActive", false)) {
+            val kills = prefs.getInt("svcKills", 0) + 1
+            prefs.edit().putInt("svcKills", kills).putBoolean("svcDied", true).apply()
+            LogStore.add(this, "সার্ভিস গতবার নিজে বন্ধ হয়নি, অস্বাভাবিকভাবে বন্ধ হয়েছিল (এ পর্যন্ত $kills বার). ফোনের ব্যাকগ্রাউন্ড গাইড দেখুন")
+        } else {
+            prefs.edit().putBoolean("svcDied", false).apply()
+        }
+        prefs.edit().putBoolean("svcActive", true).apply()
+
         LogStore.add(
             this,
             "SERVICE START lang=$lang wakeLock=$useWakeLock " +
@@ -96,6 +111,7 @@ class WakeService : Service() {
         }
 
         speaker = Speaker(this).also { it.init(lang) }
+        startCallWatch()
         logBattery()
         main.postDelayed(batteryTick, BATTERY_LOG_MS)
         refreshTile()
@@ -111,7 +127,7 @@ class WakeService : Service() {
         Thread {
             try {
                 val t0 = SystemClock.elapsedRealtime()
-                val eng = VoskWakeEngine(appCtx, path) { main.post { onWake() } }
+                val eng = VoskWakeEngine(appCtx, path, WakeSensitivity.from(getSharedPreferences("buildx", MODE_PRIVATE).getInt("wakeSens", 1))) { main.post { onWake() } }
                 val ms = SystemClock.elapsedRealtime() - t0
                 main.post {
                     if (!running) {
@@ -155,8 +171,58 @@ class WakeService : Service() {
     private fun resumeWake() {
         if (!running) return
         conversation = null
+        if (callActive) {
+            LogStore.add(this, "LISTENING: কল চলছে, কল শেষে চালু হবে")
+            return
+        }
         engine?.start()
         LogStore.add(this, "LISTENING: আবার চালু")
+    }
+
+    // ---------- phone calls ----------
+
+    /** While any call is on, the wake engine stays off (the mic belongs to the call); it restarts when the call ends. */
+    private fun startCallWatch() {
+        val w = CallWatcher(this) { state -> onCallState(state) }
+        if (w.start()) {
+            callWatcher = w
+            LogStore.add(this, "CALL WATCH চালু")
+        } else {
+            LogStore.add(this, "CALL WATCH বন্ধ (ফোনের অবস্থা দেখার পারমিশন নেই)")
+        }
+        CallTracker.shared.announce = { sentence -> main.post { speakThenResume(sentence) } }
+    }
+
+    private fun onCallState(state: Int) {
+        if (!running) return
+        val summary = CallTracker.shared.onState(state, System.currentTimeMillis())
+        if (state == CallTracker.IDLE) {
+            if (callActive) LogStore.add(this, "CALL শেষ")
+            callActive = false
+            if (summary != null) speakThenResume(summary) else restartEngineIfIdle()
+        } else {
+            if (!callActive) LogStore.add(this, "CALL ${if (state == CallTracker.RINGING) "ইনকামিং" else "চলছে/ডায়াল"}")
+            callActive = true
+            if (state == CallTracker.RINGING) {
+                conversation?.cancel()
+                conversation = null
+            }
+            engine?.pause()
+        }
+    }
+
+    private fun speakThenResume(sentence: String) {
+        val sp = speaker
+        if (sp == null) {
+            restartEngineIfIdle()
+        } else {
+            sp.speak(sentence) { main.post { restartEngineIfIdle() } }
+        }
+    }
+
+    private fun restartEngineIfIdle() {
+        if (!running || callActive || conversation != null) return
+        engine?.start()
     }
 
     // ---------- helpers ----------
@@ -214,6 +280,10 @@ class WakeService : Service() {
         main.removeCallbacksAndMessages(null)
         conversation?.cancel()
         conversation = null
+        callWatcher?.stop()
+        callWatcher = null
+        getSharedPreferences("buildx", MODE_PRIVATE).edit().putBoolean("svcActive", false).apply()
+        CallTracker.shared.announce = null
         engine?.release()
         engine = null
         speaker?.shutdown()
