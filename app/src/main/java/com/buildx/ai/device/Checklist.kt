@@ -1,0 +1,73 @@
+package com.buildx.ai.device
+
+data class CheckItem(val id: String, val phase: Int, val title: String, val how: String)
+
+/**
+ * The pass checklist for phases 0-6, run by hand on each phone (the app cannot judge "did it hear me?" itself).
+ * [Result]: pass / fail / not tried.
+ */
+object Checklist {
+
+    enum class Result { PASS, FAIL, NONE }
+
+    val items: List<CheckItem> = listOf(
+        CheckItem("wake10", 0, "\"Hey BuildX\" ১০ বারে অন্তত ৮ বার ধরে", "স্ক্রিন অফ, ফোন টেবিলে, এক হাত দূর থেকে ১০ বার বলুন; লগে WAKE গুনুন"),
+        CheckItem("wake_off", 0, "স্ক্রিন অফ অবস্থায় (৩০ মিনিট পরেও) সাড়া দেয়", "স্ক্রিন বন্ধ করে ৩০ মিনিট রেখে ডাকুন"),
+        CheckItem("false_trig", 0, "ঘণ্টায় ২টির বেশি ভুল ট্রিগার নেই", "স্বাভাবিক কথাবার্তা/টিভির মধ্যে ১ ঘণ্টা চালু রাখুন; লগে WAKE গুনুন"),
+        CheckItem("stt_bn", 0, "বাংলা STT: ২০টির মধ্যে অন্তত ১৬টি ঠিক", "\"STT টেস্ট\" বাটনে ২০টি বাক্য বলে লগ দেখুন"),
+        CheckItem("service", 1, "নোটিফিকেশন ও টাইল দিয়ে চালু/বন্ধ হয়", "নোটিফিকেশনের বাটন ও Quick Settings টাইল চেপে দেখুন"),
+        CheckItem("time", 1, "\"এখন কয়টা বাজে\" → সময় বলে", "Hey BuildX → \"এখন কয়টা বাজে\""),
+        CheckItem("parse", 2, "১০টি বাক্য ঠিক বোঝে", "\"কী বুঝবে দেখাও\" বাটনে নানা বাক্য লিখে দেখুন"),
+        CheckItem("call_name", 3, "নাম বলে কল যায়", "\"আব্বুকে ফোন করো\" → \"হ্যাঁ\" → কল লাগে"),
+        CheckItem("call_ask", 3, "একই নামে দুজন থাকলে জিজ্ঞেস করে", "দুটি একই-নামের কন্টাক্ট রেখে চেষ্টা করুন"),
+        CheckItem("call_number", 3, "নম্বর বলে কল যায়", "\"০১৭… নম্বরে কল দাও\""),
+        CheckItem("flash", 4, "ফ্ল্যাশলাইট চালু/বন্ধ (স্ক্রিন অফ থেকে)", "\"টর্চ জ্বালাও\", \"টর্চ নিভাও\""),
+        CheckItem("volume", 4, "ভলিউম বাড়ে/কমে/সেট হয়", "\"ভলিউম ৫০ করো\", \"ভলিউম কমাও\", \"মিউট করো\""),
+        CheckItem("open_app", 4, "অ্যাপ খোলে (স্ক্রিন অফ থেকে)", "\"ইউটিউব খোলো\" — স্ক্রিন জাগে ও অ্যাপ সামনে আসে"),
+        CheckItem("alarm", 4, "অ্যালার্ম ক্লকে বসে", "\"কাল সকাল ৬টায় অ্যালার্ম দাও\" → ক্লক অ্যাপে দেখুন"),
+        CheckItem("panel", 4, "ওয়াইফাই/ব্লুটুথ প্যানেল খোলে", "Accessibility বন্ধ রেখে \"ওয়াইফাই খোলো\""),
+        CheckItem("lock", 5, "স্ক্রিন লক হয়", "Accessibility চালু রেখে \"স্ক্রিন লক করো\""),
+        CheckItem("wake_screen", 5, "স্ক্রিন জাগে ও আনলকের কথা বলে", "\"স্ক্রিন জাগাও\", \"ফোন আনলক করো\""),
+        CheckItem("toggle_wifi", 5, "ওয়াইফাই নিজে টগল হয়", "\"ওয়াইফাই বন্ধ করো\", \"ওয়াইফাই চালু করো\""),
+        CheckItem("toggle_bt", 5, "ব্লুটুথ নিজে টগল হয়", "\"ব্লুটুথ চালু করো\", \"ব্লুটুথ বন্ধ করো\""),
+        CheckItem("chain3", 6, "৩-ধাপের চেইন চলে", "\"টর্চ জ্বালাও আর ভলিউম পঞ্চাশ করো তারপর ইউটিউব খোলো\""),
+        CheckItem("chain_fail", 6, "চেইনে ব্যর্থতা ঠিকভাবে জানায়", "ক্যামেরা অন্য অ্যাপে খোলা রেখে \"টর্চ জ্বালাও আর ভলিউম কমাও\""),
+        CheckItem("survive", 7, "সার্ভিস নিজে বন্ধ হয়নি (লগে \"অস্বাভাবিকভাবে বন্ধ\" নেই)", "সারাদিন চালু রেখে সন্ধ্যায় অ্যাপ খুলে দেখুন")
+    )
+
+    fun phaseName(p: Int) = "ফেজ $p"
+
+    fun summary(results: Map<String, Result>): Triple<Int, Int, Int> {
+        var pass = 0
+        var fail = 0
+        var none = 0
+        for (it in items) when (results[it.id] ?: Result.NONE) {
+            Result.PASS -> pass++
+            Result.FAIL -> fail++
+            Result.NONE -> none++
+        }
+        return Triple(pass, fail, none)
+    }
+
+    /** the text to paste when reporting a device */
+    fun format(device: String, results: Map<String, Result>): String {
+        val (pass, fail, none) = summary(results)
+        val sb = StringBuilder()
+        sb.append("চেকলিস্ট: $device\n")
+        sb.append("পাস $pass, ফেল $fail, চেষ্টা হয়নি $none (মোট ${items.size})\n")
+        var phase = -1
+        for (item in items) {
+            if (item.phase != phase) {
+                phase = item.phase
+                sb.append("\n${phaseName(phase)}\n")
+            }
+            val mark = when (results[item.id] ?: Result.NONE) {
+                Result.PASS -> "✓"
+                Result.FAIL -> "✗"
+                Result.NONE -> "-"
+            }
+            sb.append(" $mark ${item.title}\n")
+        }
+        return sb.toString().trimEnd()
+    }
+}
