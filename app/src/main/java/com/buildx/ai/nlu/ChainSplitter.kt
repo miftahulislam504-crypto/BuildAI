@@ -19,16 +19,20 @@ object ChainSplitter {
         "volume", "mute", "unmute", "louder", "quieter" -> "volume"
         "screen", "lock", "unlock", "wake" -> "screen"
         "whattime" -> "time"
+        "takephoto", "selfie" -> "take_photo"
         else -> if (canon in Lexicon.appKeys) "open_app" else null
     }
 
     private val verbish = setOf("_v", "open", "on", "off", "up", "down", "cut", "wake", "max", "min", "toggle", "show")
     private val structural = setOf("_f", "_v", "sep")
 
-    /** a trigger that already contains its own verb ("ফোন করো", "কয়টা বাজে") ends its command by itself */
-    private fun selfClosing(t: Tok) = (t.canon == "call" || t.canon == "whattime") && t.raw.contains(' ')
+    /** a trigger that already contains its own verb ("ফোন করো", "কয়টা বাজে", "ছবি তোলো") ends its command by itself */
+    private fun selfClosing(t: Tok) = (t.canon == "call" || t.canon == "whattime" || t.canon == "takephoto") && t.raw.contains(' ')
 
-    fun split(toks: List<Tok>): List<List<Tok>> {
+    fun split(allToks: List<Tok>): List<List<Tok>> {
+        // "ক্যামেরা দিয়ে ছবি তোলো": the camera is how, not a second command
+        val toks = if (allToks.any { it.canon == "takephoto" || it.canon == "selfie" })
+            allToks.map { if (it.canon == "camera") Tok(it.raw, "_f") else it } else allToks
         val out = ArrayList<List<Tok>>()
         var cur = ArrayList<Tok>()
         var hasTrigger = false

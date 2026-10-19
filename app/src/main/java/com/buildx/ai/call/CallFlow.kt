@@ -31,7 +31,10 @@ class CallFlow(
     private val placer: CallPlacer,
     private val nicknames: Map<String, String> = emptyMap(),
     private val confirm: Boolean = true,
-    private val log: (String) -> Unit = {}
+    private val log: (String) -> Unit = {},
+    /** how to say the channel: viaBn "WhatsApp-এ " (note the trailing space), viaEn " on WhatsApp"; empty = ordinary phone call */
+    private val viaBn: String = "",
+    private val viaEn: String = ""
 ) {
     private fun t(bnText: String, enText: String) = if (bn) bnText else enText
     private fun fail(bnText: String, enText: String) = ActionResult(false, t(bnText, enText))
@@ -179,7 +182,7 @@ class CallFlow(
     }
 
     private fun askYesNo(label: String, number: String, retry: Boolean): ActionResult =
-        ask("${objective(label)} কল করব?", "Call $label?") { reply ->
+        ask("${objective(label)} ${viaBn}কল করব?", "Call $label$viaEn?") { reply ->
             when (Reply.yesNo(reply)) {
                 Reply.YesNo.YES -> place(label, number)
                 Reply.YesNo.NO -> fail("ঠিক আছে, কল করছি না", "Okay, not calling")
@@ -194,7 +197,7 @@ class CallFlow(
         val out = placer.place(number, label)
         log("CALL $label ($number) ok=${out.ok} ${out.note ?: ""}")
         return if (out.ok) {
-            ActionResult(true, out.note ?: t("${objective(label)} কল করছি", "Calling $label"))
+            ActionResult(true, out.note ?: t("${objective(label)} ${viaBn}কল করছি", "Calling $label$viaEn"))
         } else {
             ActionResult(false, out.note ?: t("কল করতে পারিনি", "I couldn't place the call"))
         }

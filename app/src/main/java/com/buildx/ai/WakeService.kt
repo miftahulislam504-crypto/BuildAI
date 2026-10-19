@@ -20,6 +20,8 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.service.quicksettings.TileService
+import com.buildx.ai.assistant.AssistantBridge
+import com.buildx.ai.assistant.BuildXVoiceInteractionService
 import com.buildx.ai.call.CallTracker
 import com.buildx.ai.call.CallWatcher
 import com.buildx.ai.voice.Conversation
@@ -44,6 +46,9 @@ class WakeService : Service() {
 
         @Volatile
         var running = false
+
+        @Volatile
+        var instance: WakeService? = null
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -77,6 +82,7 @@ class WakeService : Service() {
         startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         if (running) return START_NOT_STICKY
         running = true
+        instance = this
         startedAt = SystemClock.elapsedRealtime()
 
         val prefs = getSharedPreferences("buildx", MODE_PRIVATE)
@@ -151,9 +157,18 @@ class WakeService : Service() {
     // ---------- conversation flow ----------
 
     private fun onWake() {
-        if (!running) return
+        if (!running || conversation != null) return
         detections++
         LogStore.add(this, "WAKE #$detections")
+        triggerConversation(showPopup = true)
+    }
+
+    /**
+     * Start one conversation now (after "Hey BuildX", or from the assistant key). If BuildX is the phone's assistant
+     * and the popup is enabled, a small popup with the last few lines is shown, even over the lock screen.
+     */
+    fun triggerConversation(showPopup: Boolean) {
+        if (!running || conversation != null || callActive) return
         vibrate()
         engine?.pause() // frees the microphone
 
@@ -163,9 +178,17 @@ class WakeService : Service() {
             return
         }
         commands++
-        val c = Conversation(this, lang, sp)
+        val popup = getSharedPreferences("buildx", MODE_PRIVATE).getBoolean("assistPopup", true)
+        if (showPopup && popup) {
+            AssistantBridge.clear()
+            BuildXVoiceInteractionService.instance?.show(fromWake = true)
+        }
+        val c = Conversation(this, lang, sp) { AssistantBridge.post(it) }
         conversation = c
-        c.run { resumeWake() }
+        c.run {
+            AssistantBridge.hideLater(2500)
+            resumeWake()
+        }
     }
 
     private fun resumeWake() {
@@ -295,6 +318,7 @@ class WakeService : Service() {
             LogStore.add(this, "SERVICE STOP wakes=$detections")
         }
         running = false
+        instance = null
         refreshTile()
         super.onDestroy()
     }

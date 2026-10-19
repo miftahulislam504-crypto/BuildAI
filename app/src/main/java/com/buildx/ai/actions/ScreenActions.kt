@@ -7,6 +7,7 @@ import android.os.Looper
 import android.os.PowerManager
 import com.buildx.ai.LogStore
 import com.buildx.ai.a11y.BuildXAccessibilityService
+import com.buildx.ai.admin.BuildXDeviceAdmin
 import com.buildx.ai.system.BackgroundLauncher
 
 private val mainHandler = Handler(Looper.getMainLooper())
@@ -18,14 +19,16 @@ object ScreenLockAction : Action {
     override fun execute(ac: ActionContext, params: Map<String, String>): ActionResult {
         val ctx = ac.context.applicationContext
         val svc = BuildXAccessibilityService.instance
-            ?: return ActionResult(
+        val sent = when {
+            svc != null -> svc.lockScreen()
+            BuildXDeviceAdmin.isActive(ctx) -> BuildXDeviceAdmin.lockNow(ctx)
+            else -> return ActionResult(
                 false,
-                if (ac.bn) "স্ক্রিন লক করতে Accessibility সার্ভিস চালু করতে হবে। অ্যাপ খুলে গাইড দেখুন"
-                else "To lock the screen the Accessibility service must be on. Open the app for the guide"
+                if (ac.bn) "স্ক্রিন লক করতে Accessibility অথবা Device admin চালু করতে হবে। অ্যাপ খুলে দেখুন"
+                else "To lock the screen, turn on Accessibility or Device admin. Open the app"
             )
-        if (!svc.lockScreen()) {
-            return ActionResult(false, if (ac.bn) "লক করতে পারিনি" else "I couldn't lock the screen")
         }
+        if (!sent) return ActionResult(false, if (ac.bn) "লক করতে পারিনি" else "I couldn't lock the screen")
         return ActionResult(true, "", deferred = Deferred { report ->
             mainHandler.postDelayed({
                 val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager

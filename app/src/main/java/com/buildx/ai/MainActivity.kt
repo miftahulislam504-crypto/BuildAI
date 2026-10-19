@@ -26,7 +26,12 @@ import android.widget.TextView
 import com.buildx.ai.actions.ActionContext
 import com.buildx.ai.actions.ActionResult
 import com.buildx.ai.actions.FollowUp
+import android.app.admin.DevicePolicyManager
+import com.buildx.ai.a11y.A11yEnabler
 import com.buildx.ai.a11y.BuildXAccessibilityService
+import com.buildx.ai.admin.BuildXDeviceAdmin
+import com.buildx.ai.assistant.AssistantBridge
+import com.buildx.ai.assistant.BuildXVoiceInteractionService
 import android.app.AlertDialog
 import android.widget.Toast
 import com.buildx.ai.device.CrashLog
@@ -65,6 +70,10 @@ class MainActivity : Activity() {
     private lateinit var confirmBox: CheckBox
     private lateinit var autoToggleBox: CheckBox
     private lateinit var a11yStatus: TextView
+    private lateinit var assistStatus: TextView
+    private lateinit var adminStatus: TextView
+    private lateinit var popupBox: CheckBox
+    private lateinit var autoStartBox: CheckBox
     private lateinit var stabilityStatus: TextView
     private lateinit var sensGroup: RadioGroup
     private lateinit var nickInput: EditText
@@ -88,7 +97,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "BuildX AI — ধাপ ৭"
+            text = "BuildX AI — ধাপ ৯"
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
         })
@@ -131,10 +140,12 @@ class MainActivity : Activity() {
         root.addView(a11yStatus)
         root.addView(button("Accessibility সেটিংস খুলুন") { openAccessibilitySettings() })
         root.addView(button("অ্যাপ তথ্য খুলুন (\"Allow restricted settings\" দেওয়ার জন্য)") { openAppInfo() })
+        root.addView(button("Accessibility জোর করে চালু করুন (একবার কম্পিউটার থেকে ADB কমান্ড লাগে)") { forceEnableA11y() })
         root.addView(TextView(this).apply {
             text = "চালু করার ধাপ:\n" +
                 "১. \"Accessibility সেটিংস খুলুন\" → \"ইনস্টল করা অ্যাপ\" (বা \"ডাউনলোড করা অ্যাপ\") → BuildX AI → চালু করুন।\n" +
-                "২. যদি \"সীমাবদ্ধ সেটিং\" (Restricted setting) বলে চালু করতে না দেয়: \"অ্যাপ তথ্য খুলুন\" চাপুন → উপরে ডানের ⋮ মেনু → \"Allow restricted settings\" → PIN/ফিঙ্গারপ্রিন্ট দিন → আবার ধাপ ১।\n" +
+                "২. \"Restricted setting\" বলে আটকালে: \"OK\" চেপে বেরিয়ে আসুন → \"অ্যাপ তথ্য খুলুন\" চাপুন (বা Settings → Apps → BuildX AI) → উপরে ডানের ⋮ (More options) → \"Allow restricted settings\" → PIN/ফিঙ্গারপ্রিন্ট দিন → আবার ধাপ ১। (এই অপশন আটকানোর বার্তা একবার দেখার পরেই আসে)।\n" +
+                "   তাতেও না হলে নিচের \"Device admin\" দিয়ে অন্তত স্ক্রিন লক চালানো যাবে।\n" +
                 "৩. এটা চালু না করলে শুধু স্ক্রিন লক আর ওয়াইফাই/ব্লুটুথ নিজে টগল করা কাজ করবে না, বাকি সব কাজ করবে।"
             textSize = 13f
         })
@@ -143,6 +154,41 @@ class MainActivity : Activity() {
             isChecked = prefs.getBoolean("autoToggle", true)
         }
         root.addView(autoToggleBox)
+
+        root.addView(TextView(this).apply {
+            text = "ডিজিটাল অ্যাসিস্ট্যান্ট (পপআপ, সিস্টেম নিজে চালু রাখে)"
+            textSize = 16f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        assistStatus = TextView(this)
+        root.addView(assistStatus)
+        root.addView(button("\"ডিফল্ট ডিজিটাল অ্যাসিস্ট্যান্ট\" সেটিংস খুলুন") { openAssistantSettings() })
+        root.addView(TextView(this).apply {
+            text = "সেখানে BuildX AI বেছে নিন। তারপর: (১) সাইড-কী/হোম-জেসচার চেপে ধরলে সরাসরি শোনা শুরু ও পপআপ আসবে, (২) \"Hey BuildX\" বললে লক স্ক্রিনের উপরেও পপআপ আসবে, (৩) সিস্টেম এই অ্যাপকে ফোন চালু হতেই সচল রাখে।\n" +
+                "মনে রাখুন: অ্যাসিস্ট্যান্ট হলেও ফোন আনলক করা যায় না (সেটা শুধু আপনার PIN/ফিঙ্গারপ্রিন্ট), আর \"Hey\" শোনার ইঞ্জিন সিস্টেম দেয় না, সেটা BuildX-এর নিজের সার্ভিসই করে।"
+            textSize = 13f
+        })
+        popupBox = CheckBox(this).apply {
+            text = "\"Hey BuildX\" বললে পপআপ দেখাও"
+            isChecked = prefs.getBoolean("assistPopup", true)
+        }
+        root.addView(popupBox)
+        autoStartBox = CheckBox(this).apply {
+            text = "অ্যাসিস্ট্যান্ট চালু হলে নিজে থেকে শোনা শুরু করার চেষ্টা করো"
+            isChecked = prefs.getBoolean("assistAutoStart", true)
+        }
+        root.addView(autoStartBox)
+        root.addView(button("পপআপ পরীক্ষা করো") { testPopup() })
+
+        root.addView(TextView(this).apply {
+            text = "স্ক্রিন লক (Accessibility ছাড়া বিকল্প)"
+            textSize = 16f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        adminStatus = TextView(this)
+        root.addView(adminStatus)
+        root.addView(button("Device admin চালু করুন (শুধু স্ক্রিন লক করার জন্য)") { enableDeviceAdmin() })
+        root.addView(button("Device admin বন্ধ করুন") { disableDeviceAdmin() })
 
         root.addView(TextView(this).apply {
             text = "ফোন ও স্থায়িত্ব"
@@ -170,7 +216,7 @@ class MainActivity : Activity() {
             textSize = 16f
             setTypeface(typeface, Typeface.BOLD)
         })
-        root.addView(button("কল/কন্টাক্ট/ফোন-অবস্থার পারমিশন দিন") { requestCallPerms() })
+        root.addView(button("কল/কন্টাক্ট/ক্যামেরা/ফোন-অবস্থার পারমিশন দিন") { requestCallPerms() })
         confirmBox = CheckBox(this).apply {
             text = "কল করার আগে জিজ্ঞেস করো (\"কল করব?\")"
             isChecked = prefs.getBoolean("confirmCall", true)
@@ -237,6 +283,7 @@ class MainActivity : Activity() {
         refreshPermStatus()
         refreshSim()
         refreshA11y()
+        refreshAssistant()
         refreshStability()
         refreshLog()
         LogStore.listener = { runOnUiThread { refreshLog() } }
@@ -392,7 +439,8 @@ class MainActivity : Activity() {
         val need = listOf(
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.CAMERA
         ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) {
             LogStore.add(this, "কল ও কন্টাক্টের পারমিশন আগেই দেওয়া আছে")
@@ -468,12 +516,65 @@ class MainActivity : Activity() {
             .putBoolean("wakeLock", wakeLockBox.isChecked)
             .putBoolean("confirmCall", confirmBox.isChecked)
             .putBoolean("autoToggle", autoToggleBox.isChecked)
+            .putBoolean("assistPopup", popupBox.isChecked)
+            .putBoolean("assistAutoStart", autoStartBox.isChecked)
             .putString("nicknames", nickInput.text.toString())
             .apply()
     }
 
     private fun currentLang(): String =
         if (langGroup.checkedRadioButtonId == idEnglish) "en-US" else "bn-BD"
+
+    private fun refreshAssistant() {
+        val active = BuildXVoiceInteractionService.isActive(this)
+        assistStatus.text = if (active) "ডিফল্ট অ্যাসিস্ট্যান্ট: ✓ BuildX AI" else "ডিফল্ট অ্যাসিস্ট্যান্ট: ✗ BuildX নয় (নিচের বাটনে বেছে নিন)"
+        val admin = BuildXDeviceAdmin.isActive(this)
+        adminStatus.text = if (admin) "Device admin: ✓ চালু (স্ক্রিন লক করতে পারবে)" else "Device admin: ✗ বন্ধ"
+    }
+
+    private fun openAssistantSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (e2: Exception) {
+                LogStore.add(this, "অ্যাসিস্ট্যান্ট সেটিংস খোলা যায়নি: ${e2.message}")
+            }
+        }
+    }
+
+    private fun testPopup() {
+        val svc = BuildXVoiceInteractionService.instance
+        if (svc == null) {
+            LogStore.add(this, "পপআপ: BuildX এখনো ডিফল্ট অ্যাসিস্ট্যান্ট নয় (বা সিস্টেম এখনো সংযোগ দেয়নি)")
+            return
+        }
+        AssistantBridge.clear()
+        if (svc.show(fromWake = true)) {
+            AssistantBridge.post("🎙 পরীক্ষা: এটা পপআপের নমুনা")
+            AssistantBridge.post("→ লগ এভাবে দেখাবে")
+            AssistantBridge.hideLater(4000)
+        }
+    }
+
+    private fun enableDeviceAdmin() {
+        try {
+            startActivity(
+                Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                    .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, BuildXDeviceAdmin.component(this))
+                    .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "শুধু \"স্ক্রিন লক করো\" কমান্ডের জন্য। আর কিছু করতে পারবে না। বন্ধ করতে অ্যাপের \"Device admin বন্ধ করুন\" বাটন চাপুন।")
+            )
+        } catch (e: Exception) {
+            LogStore.add(this, "Device admin চালু করার স্ক্রিন খোলা যায়নি: ${e.message}")
+        }
+    }
+
+    private fun disableDeviceAdmin() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        dpm.removeActiveAdmin(BuildXDeviceAdmin.component(this))
+        refreshAssistant()
+    }
 
     private fun refreshStability() {
         val maker = OemGuide.detect(Build.MANUFACTURER, Build.BRAND)
@@ -547,6 +648,15 @@ class MainActivity : Activity() {
             connected -> "Accessibility: ✓ চালু ও সংযুক্ত"
             enabled -> "Accessibility: চালু করা আছে, সংযোগের অপেক্ষায় (কয়েক সেকেন্ড পরে আবার দেখুন)"
             else -> "Accessibility: ✗ বন্ধ (নিচের ধাপ দেখুন)"
+        }
+    }
+
+    private fun forceEnableA11y() {
+        if (A11yEnabler.enable(this)) {
+            LogStore.add(this, "Accessibility চালু করা হয়েছে (কয়েক সেকেন্ডে সংযুক্ত দেখাবে)")
+            refreshA11y()
+        } else {
+            LogStore.add(this, "অনুমতি নেই। কম্পিউটারে ফোন USB বা ওয়্যারলেস ডিবাগিংয়ে যুক্ত করে একবার চালান: adb shell pm grant $packageName android.permission.WRITE_SECURE_SETTINGS")
         }
     }
 
@@ -634,7 +744,7 @@ class MainActivity : Activity() {
         fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
         permStatus.text = "মাইক: ${tick(mic)}   নোটিফিকেশন: ${tick(notif)}   ব্যাটারি ছাড়: ${tick(battery)}\n" +
             "কল: ${tick(has(Manifest.permission.CALL_PHONE))}   কন্টাক্ট: ${tick(has(Manifest.permission.READ_CONTACTS))}   " +
-            "ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}"
+            "ক্যামেরা: ${tick(has(Manifest.permission.CAMERA))}   ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}"
     }
 
     private fun refreshModelStatus() {

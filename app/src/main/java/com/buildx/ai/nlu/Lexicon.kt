@@ -38,6 +38,11 @@ object Lexicon {
         "afternoon" to "বিকাল|বিকেল|afternoon",
         "evening" to "সন্ধ্যা|সন্ধ্যে|evening",
         "night" to "রাত|রাত্রি|night|tonight",
+        // ---- photo / video ----
+        "takephoto" to "ছবি তুলে|ফটো তুলে|ছবি তোলো|ছবি তুলো|ছবি তুলুন|ছবি তোল|ছবি তুলে দাও|ছবি তুলে দিন|ছবি তুলবে|ছবি নাও|ছবি নিন|ছবি ক্লিক|ফটো তোলো|ফটো তুলো|ফটো তুলুন|ফটো তোল|ফটো নাও|take photo|take a photo|take the photo|take picture|take a picture|take the picture|take pic|click photo|click a photo|click picture|capture photo|capture a photo|snap a photo",
+        "selfie" to "সেলফি|selfie",
+        "front" to "ফ্রন্ট|ফ্রন্টের|front|সামনের",
+        "video" to "ভিডিও|video",
         // ---- screen ----
         "wake" to "জাগাও|জাগান|জাগিয়ে|জাগিও|জাগো|wake|wake up",
         "screen" to "স্ক্রিন|স্ক্রীন|স্ক্রিণ|screen|ডিসপ্লে|display",

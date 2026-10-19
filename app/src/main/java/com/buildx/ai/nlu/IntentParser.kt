@@ -14,7 +14,7 @@ data class Parsed(val intent: String, val slots: Map<String, String>, val normal
 object IntentParser {
 
     private val priority = listOf(
-        "end_call", "call", "alarm", "flashlight", "wifi", "bluetooth", "volume", "screen", "time", "open_app", "cancel"
+        "end_call", "call", "alarm", "take_photo", "flashlight", "wifi", "bluetooth", "volume", "screen", "time", "open_app", "cancel"
     )
     private val phoneNumber = Regex("^\\+?\\d+$")
     private val smallNumber = Regex("^\\d{1,3}$")
@@ -67,6 +67,9 @@ object IntentParser {
         val alarmFromWake = alarmWord < 0 && wakeMe >= 0 && !x.has("screen") && strictClock != null
         add("alarm", if (alarmWord >= 0) alarmWord else if (alarmFromWake) wakeMe else -1)
 
+        val photoPos = x.idx("takephoto", "selfie")
+        add("take_photo", photoPos)
+
         add("flashlight", x.idx("flashlight"))
         add("wifi", x.idx("wifi"))
         add("bluetooth", x.idx("bluetooth"))
@@ -79,7 +82,11 @@ object IntentParser {
 
         if ("alarm" !in hits) add("time", x.idx("whattime"))
 
-        val appPos = c.indices.firstOrNull { c[it] in Lexicon.appKeys && !(c[it] == "settings" && ("wifi" in hits || "bluetooth" in hits)) } ?: -1
+        val appPos = c.indices.firstOrNull {
+            c[it] in Lexicon.appKeys &&
+                !(c[it] == "settings" && ("wifi" in hits || "bluetooth" in hits)) &&
+                !(c[it] == "camera" && photoPos >= 0) // "ক্যামেরা দিয়ে ছবি তোলো" is one command
+        } ?: -1
         if (appPos >= 0) add("open_app", appPos)
         else if (hits.isEmpty() && x.has("open")) add("open_app", x.idx("open"))
 
@@ -88,11 +95,18 @@ object IntentParser {
         // ---- primary intent ----
         val primaryKey = priority.firstOrNull { it in hits }
         fun realName(key: String) = if (key == "screen") screenName!! else key
-        val intent = primaryKey?.let { realName(it) } ?: "unknown"
+        var intent = primaryKey?.let { realName(it) } ?: "unknown"
+        // a call that names WhatsApp, or a video call, goes through WhatsApp
+        if (intent == "call" && (x.has("whatsapp") || x.has("video"))) intent = "whatsapp_call"
 
         val slots = LinkedHashMap<String, String>()
         when (intent) {
             "call" -> callSlots(x, slots)
+            "whatsapp_call" -> {
+                callSlots(x, slots)
+                if (x.has("video")) slots["video"] = "1"
+            }
+            "take_photo" -> slots["camera"] = if (x.has("front", "selfie")) "front" else "back"
             "alarm" -> alarmSlots(x, slots)
             "flashlight" -> slots["state"] = onOff(x, openAsOn = true) ?: "toggle"
             "wifi", "bluetooth" -> slots["state"] = onOff(x, openAsOn = false) ?: "open"
@@ -149,7 +163,7 @@ object IntentParser {
 
     // ---------- call ----------
 
-    private val notName = setOf("call", "phone", "number", "_f", "_v", "sep", "cut", "hangup")
+    private val notName = setOf("call", "phone", "number", "_f", "_v", "sep", "cut", "hangup", "whatsapp", "video", "on")
 
     private fun callSlots(x: Ctx, slots: MutableMap<String, String>) {
         // phone number: the longest run of digit tokens (digits spoken one by one are joined)

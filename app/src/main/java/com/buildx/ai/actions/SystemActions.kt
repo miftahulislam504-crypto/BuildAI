@@ -345,7 +345,8 @@ private fun panel(
     kind: ToggleLabels.Kind,
     isOn: () -> Boolean?,
     state: String?,
-    intent: Intent
+    intent: Intent,
+    toggleIntent: Intent = intent
 ): ActionResult {
     val ctx = ac.context.applicationContext
     val enabled = isOn()
@@ -354,13 +355,15 @@ private fun panel(
     if (enabled != null && ((wantOn && enabled) || (wantOff && !enabled))) {
         return ActionResult(true, if (enabled) ac.t("$thingBn আগেই চালু আছে", "$thingEn is already on") else ac.t("$thingBn আগেই বন্ধ আছে", "$thingEn is already off"))
     }
-    val ok = BackgroundLauncher.start(ctx, intent)
-    LogStore.add(ctx, "PANEL $thingEn state=$state now=$enabled ok=$ok")
-    if (!ok) return ActionResult(false, ac.t("$thingBn সেটিংস খোলা যায়নি", "Couldn't open $thingEn settings"))
-
     val svc = BuildXAccessibilityService.instance
     val auto = ctx.getSharedPreferences("buildx", Context.MODE_PRIVATE).getBoolean("autoToggle", true)
-    if ((wantOn || wantOff) && svc != null && auto) {
+    val willTap = (wantOn || wantOff) && svc != null && auto
+    // to tap the switch the full settings page is more predictable than the pop-up panel
+    val ok = BackgroundLauncher.start(ctx, if (willTap) toggleIntent else intent)
+    LogStore.add(ctx, "PANEL $thingEn state=$state now=$enabled ok=$ok autoTap=$willTap")
+    if (!ok) return ActionResult(false, ac.t("$thingBn সেটিংস খোলা যায়নি", "Couldn't open $thingEn settings"))
+
+    if (willTap && svc != null) {
         return ActionResult(true, "", deferred = Deferred { report ->
             ToggleTapper.run(svc, kind, wantOn, isOn) { out ->
                 report(
@@ -387,7 +390,12 @@ private fun panel(
         false -> ac.t("এখন বন্ধ। ", "It is off now. ")
         null -> ""
     }
-    return ActionResult(true, ac.t("$thingBn: $nowText" + "সেটিংস খুলেছি, $doing টগলে ট্যাপ করুন", "$thingEn: $nowText" + "I opened the settings, tap the toggle $doing"))
+    val hint = if ((wantOn || wantOff) && svc == null) {
+        ac.t("। নিজে টগল করাতে Accessibility চালু করুন (অ্যাপে গাইড আছে)", ". To have me tap it, turn on Accessibility (guide in the app)")
+    } else if ((wantOn || wantOff) && !auto) {
+        ac.t("। অটো টগল অ্যাপের সেটিংসে বন্ধ আছে", ". Auto toggle is switched off in the app")
+    } else ""
+    return ActionResult(true, ac.t("$thingBn: $nowText" + "সেটিংস খুলেছি, $doing টগলে ট্যাপ করুন$hint", "$thingEn: $nowText" + "I opened the settings, tap the toggle $doing$hint"))
 }
 
 object WifiAction : Action {
@@ -397,7 +405,7 @@ object WifiAction : Action {
         val wm = ac.context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         return panel(ac, "ওয়াইফাই", "Wi-Fi", ToggleLabels.Kind.WIFI,
             { try { wm.isWifiEnabled } catch (e: Exception) { null } },
-            params["state"], Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY))
+            params["state"], Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY), Intent(Settings.ACTION_WIFI_SETTINGS))
     }
 }
 

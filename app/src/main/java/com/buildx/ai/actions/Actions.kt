@@ -22,6 +22,8 @@ object ActionRegistry {
         register(UnknownAction)
         register(CancelAction)
         register(CallAction)
+        register(WhatsAppCallAction)
+        register(PhotoAction)
         register(FlashlightAction)
         register(VolumeAction)
         register(OpenAppAction)

@@ -13,6 +13,12 @@ object Describe {
                 val who = s["target"] ?: s["number"]
                 if (bn) (if (who != null) "কল: ${bnDigits(who)}" else "কল") else (if (who != null) "call $who" else "call")
             }
+            "whatsapp_call" -> {
+                val who = s["target"] ?: s["number"]
+                val kind = if (s["video"] == "1") (if (bn) "ভিডিও কল" else "video call") else (if (bn) "কল" else "call")
+                if (bn) "WhatsApp $kind${if (who != null) ": ${bnDigits(who)}" else ""}" else "WhatsApp $kind${if (who != null) " to $who" else ""}"
+            }
+            "take_photo" -> if (s["camera"] == "front") (if (bn) "সেলফি তোলা" else "take a selfie") else (if (bn) "ছবি তোলা" else "take a photo")
             "end_call" -> if (bn) "কল কাটা" else "hang up"
             "alarm" -> alarm(s, bn)
             "flashlight" -> thing(if (bn) "ফ্ল্যাশলাইট" else "flashlight", s["state"], bn)
