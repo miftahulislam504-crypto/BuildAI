@@ -17,6 +17,10 @@ object ModelManager {
     const val MODEL_NAME = "vosk-model-small-en-us-0.15"
     private const val MODEL_URL = "https://alphacephei.com/vosk/models/$MODEL_NAME.zip"
 
+    /** speaker model (~13 MB): turns a voice into numbers, for "only my voice" */
+    const val SPK_NAME = "vosk-model-spk-0.4"
+    private const val SPK_URL = "https://alphacephei.com/vosk/models/$SPK_NAME.zip"
+
     @Volatile
     var downloading = false
         private set
@@ -25,25 +29,33 @@ object ModelManager {
 
     fun isReady(ctx: Context): Boolean = File(modelDir(ctx), ".ok").exists()
 
+    fun spkDir(ctx: Context): File = File(File(ctx.filesDir, "models"), SPK_NAME)
+
+    fun isSpkReady(ctx: Context): Boolean = File(spkDir(ctx), ".ok").exists()
+
     /** Runs on a background thread; [onDone] is called on the main thread. */
-    fun download(ctx: Context, onDone: (Boolean) -> Unit) {
+    fun download(ctx: Context, onDone: (Boolean) -> Unit) = fetch(ctx, MODEL_NAME, MODEL_URL, onDone)
+
+    fun downloadSpk(ctx: Context, onDone: (Boolean) -> Unit) = fetch(ctx, SPK_NAME, SPK_URL, onDone)
+
+    private fun fetch(ctx: Context, name: String, url: String, onDone: (Boolean) -> Unit) {
         if (downloading) return
         downloading = true
         Thread {
             var ok = false
             try {
-                val zip = File(ctx.cacheDir, "$MODEL_NAME.zip")
-                downloadTo(ctx, zip)
+                val zip = File(ctx.cacheDir, "$name.zip")
+                downloadTo(ctx, zip, url)
 
                 val root = File(ctx.filesDir, "models")
-                modelDir(ctx).deleteRecursively()
+                File(root, name).deleteRecursively()
                 root.mkdirs()
                 LogStore.add(ctx, "মডেল: আনজিপ হচ্ছে...")
                 unzip(zip, root)
                 zip.delete()
 
-                File(modelDir(ctx), ".ok").writeText("ok")
-                LogStore.add(ctx, "মডেল: প্রস্তুত")
+                File(File(root, name), ".ok").writeText("ok")
+                LogStore.add(ctx, "মডেল: প্রস্তুত ($name)")
                 ok = true
             } catch (e: Exception) {
                 LogStore.add(ctx, "মডেল ERROR: ${e.javaClass.simpleName}: ${e.message}")
@@ -53,9 +65,9 @@ object ModelManager {
         }.start()
     }
 
-    private fun downloadTo(ctx: Context, dest: File) {
-        LogStore.add(ctx, "মডেল: ডাউনলোড শুরু ($MODEL_URL)")
-        val conn = URL(MODEL_URL).openConnection() as HttpURLConnection
+    private fun downloadTo(ctx: Context, dest: File, url: String) {
+        LogStore.add(ctx, "মডেল: ডাউনলোড শুরু ($url)")
+        val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 15000
         conn.readTimeout = 30000
         try {

@@ -20,6 +20,15 @@ object ChainSplitter {
         "screen", "lock", "unlock", "wake" -> "screen"
         "whattime" -> "time"
         "takephoto", "selfie" -> "take_photo"
+        "mediaplay", "mediapause", "medianext", "mediaprev" -> "media"
+        "reelnext", "reelprev" -> "swipe"
+        "plus", "minus", "times", "divided" -> "calc"
+        "brightness" -> "brightness"
+        "silentmode", "vibratemode", "ringmode" -> "ringer"
+        "battery" -> "battery"
+        "askdate" -> "date"
+        "navigate" -> "navigate"
+        "shorts", "reels" -> "open_feed"
         else -> if (canon in Lexicon.appKeys) "open_app" else null
     }
 
@@ -27,7 +36,11 @@ object ChainSplitter {
     private val structural = setOf("_f", "_v", "sep")
 
     /** a trigger that already contains its own verb ("ফোন করো", "কয়টা বাজে", "ছবি তোলো") ends its command by itself */
-    private fun selfClosing(t: Tok) = (t.canon == "call" || t.canon == "whattime" || t.canon == "takephoto") && t.raw.contains(' ')
+    private val selfClosingCanons = setOf(
+        "call", "whattime", "takephoto", "mediaplay", "mediapause", "medianext", "mediaprev", "reelnext", "reelprev"
+    )
+
+    private fun selfClosing(t: Tok) = t.canon in selfClosingCanons && t.raw.contains(' ')
 
     fun split(allToks: List<Tok>): List<List<Tok>> {
         // "ক্যামেরা দিয়ে ছবি তোলো": the camera is how, not a second command

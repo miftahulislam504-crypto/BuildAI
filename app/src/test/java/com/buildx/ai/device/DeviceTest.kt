@@ -39,7 +39,7 @@ class OemGuideTest {
 
 class ChecklistTest {
     @Test fun idsAreUnique() = Assert.assertEquals(Checklist.items.size, Checklist.items.map { it.id }.toSet().size)
-    @Test fun coversPhasesZeroToEight() = Assert.assertEquals((0..8).toSet(), Checklist.items.map { it.phase }.toSet())
+    @Test fun coversPhasesZeroToNine() = Assert.assertEquals((0..9).toSet(), Checklist.items.map { it.phase }.toSet())
     @Test fun phasesAreInOrder() = Assert.assertEquals(Checklist.items.map { it.phase }.sorted(), Checklist.items.map { it.phase })
     @Test fun summaryCounts() {
         val r = mapOf("wake10" to Checklist.Result.PASS, "time" to Checklist.Result.FAIL, "flash" to Checklist.Result.PASS)

@@ -38,7 +38,7 @@ object TextNormalizer {
         var s = sb.toString()
         s = clockColon.replace(s) { "${it.groupValues[1]}টা ${it.groupValues[2]}" }
         s = s.replace(':', ' ')
-        s = loosePlus.replace(s, " ")
+        s = loosePlus.replace(s, " plus ")
         s = digitLetterEdge.replace(s, " ")
         return s.trim().replace(spaces, " ")
     }

@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.SET_ALARM" />
     <!-- Phase 9: photos (own camera screen) and optional self-enabling of Accessibility via ADB-granted permission -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Phase 10: brightness (system settings) and silent mode (Do Not Disturb access), both granted by the person in Settings -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

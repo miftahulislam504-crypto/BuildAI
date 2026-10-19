@@ -43,6 +43,31 @@ object Lexicon {
         "selfie" to "সেলফি|selfie",
         "front" to "ফ্রন্ট|ফ্রন্টের|front|সামনের",
         "video" to "ভিডিও|video",
+        // ---- media, scrolling, everyday things ----
+        "song" to "গান|গানটা|গানটি|গানগুলো|song|songs|মিউজিক|music",
+        "play" to "বাজাও|বাজান|শোনাও|শোনান|প্লে|play",
+        "mediaplay" to "গান চালু করো|গান চালু|resume|আবার চালু করো|মিউজিক চালু করো|ভিডিও চালু করো|continue playing",
+        "mediapause" to "গান থামাও|গান বন্ধ করো|গান বন্ধ|মিউজিক থামাও|মিউজিক বন্ধ করো|ভিডিও থামাও|ভিডিও পজ|pause|পজ|পজ করো|pause music|stop music|stop the music",
+        "medianext" to "পরের গান|পরের গানটা|পরের গানে যাও|next song|next track|skip song|skip",
+        "mediaprev" to "আগের গান|আগের গানটা|আগের গানে যাও|previous song|previous track|prev song|prev track",
+        "reelnext" to "পরের রিল|পরের রিলস|পরের শর্টস|পরের শর্ট|পরের ভিডিও|পরেরটা|next reel|next reels|next short|next shorts|next video|স্ক্রল করো|স্ক্রল|নিচে স্ক্রল করো|স্ক্রল ডাউন|scroll down|scroll|swipe up|সোয়াইপ আপ",
+        "reelprev" to "আগের রিল|আগের রিলস|আগের শর্টস|আগের শর্ট|আগের ভিডিও|আগেরটা|previous reel|prev reel|previous short|উপরে স্ক্রল করো|স্ক্রল আপ|scroll up|swipe down|সোয়াইপ ডাউন",
+        "shorts" to "শর্টস|শর্ট|shorts|short",
+        "reels" to "রিলস|রিল|reels|reel",
+        "google" to "গুগল|google",
+        "search" to "সার্চ|search|খুঁজো|খুঁজে|খুঁজুন|খোঁজো|খোঁজ",
+        "navigate" to "নেভিগেট|navigate|navigation|রাস্তা|রাস্তাটা|রুট|route|directions|ডিরেকশন|দিকনির্দেশ",
+        "battery" to "ব্যাটারি|battery|চার্জ|charge",
+        "askdate" to "কত তারিখ|তারিখ|কী বার|কি বার|কোন বার|বার কত|what date|todays date|date today|date|what day|day today",
+        "brightness" to "ব্রাইটনেস|ব্রাইট|brightness|উজ্জ্বলতা",
+        "silentmode" to "সাইলেন্ট মোড|সাইলেন্ট মুড|ফোন সাইলেন্ট|নীরব মোড|silent mode",
+        "vibratemode" to "ভাইব্রেট মোড|ভাইব্রেশন মোড|ভাইব্রেট|ভাইব্রেশন|vibrate mode|vibrate",
+        "ringmode" to "নরমাল মোড|রিং মোড|রিংটোন মোড|রিংটোন চালু|রিং চালু|normal mode|ring mode",
+        "plus" to "যোগ|প্লাস|plus|add",
+        "minus" to "বিয়োগ|মাইনাস|minus|subtract",
+        "times" to "গুণ|গুন|times|multiply|multiplied by|into",
+        "divided" to "ভাগ|divided by|divide|divided",
+        "point" to "দশমিক|point",
         // ---- screen ----
         "wake" to "জাগাও|জাগান|জাগিয়ে|জাগিও|জাগো|wake|wake up",
         "screen" to "স্ক্রিন|স্ক্রীন|স্ক্রিণ|screen|ডিসপ্লে|display",
@@ -97,7 +122,7 @@ object Lexicon {
         "files" to "ফাইল|ফাইলস|ফাইল ম্যানেজার|files|file manager",
         // ---- filler / do-verbs / "and then": carry no meaning of their own, but mark where one command ends ----
         "_v" to "করো|কর|করুন|করেন|করবে|করে|করতে|করি|দাও|দিন|দে|দিয়ে|দিও|দেবে|দেন|লাগাও|লাগান",
-        "_f" to "প্লিজ|please|plz|একটু|আমাকে|আমার|আমি|তুমি|আপনি|এখন|now|কে|এ|এবার|তো|ওই|এই|the|a|an|to|my|me|can|you|could|would|set|সেট|at|for|of|it|hey|হে",
+        "_f" to "প্লিজ|please|plz|একটু|আমাকে|আমার|আমি|তুমি|আপনি|এখন|now|কে|এ|এবার|তো|ওই|এই|the|a|an|to|my|me|can|you|could|would|set|সেট|at|for|of|it|hey|হে|যাওয়ার|যেতে|যাব|যাবো|যাই",
         "sep" to "আর|এবং|তারপর|তারপরে|এরপর|এরপরে|then|and|also"
     )
 

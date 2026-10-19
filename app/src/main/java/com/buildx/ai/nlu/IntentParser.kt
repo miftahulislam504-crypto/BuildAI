@@ -14,7 +14,9 @@ data class Parsed(val intent: String, val slots: Map<String, String>, val normal
 object IntentParser {
 
     private val priority = listOf(
-        "end_call", "call", "alarm", "take_photo", "flashlight", "wifi", "bluetooth", "volume", "screen", "time", "open_app", "cancel"
+        "end_call", "call", "alarm", "take_photo", "media", "swipe", "calc", "flashlight", "wifi", "bluetooth",
+        "brightness", "ringer", "volume", "screen", "battery", "date", "time", "navigate", "web_search",
+        "youtube_play", "open_feed", "open_app", "cancel"
     )
     private val phoneNumber = Regex("^\\+?\\d+$")
     private val smallNumber = Regex("^\\d{1,3}$")
@@ -70,6 +72,21 @@ object IntentParser {
         val photoPos = x.idx("takephoto", "selfie")
         add("take_photo", photoPos)
 
+        // ---- everyday things ----
+        val contentNoSong = queryRaw(x, keepSong = false)
+        val hasPlay = x.has("play")
+        val hasSong = x.has("song")
+        val ytWord = x.has("youtube")
+        val mediaPos = x.idx("mediaplay", "mediapause", "medianext", "mediaprev")
+        add("media", mediaPos)
+        add("swipe", x.idx("reelnext", "reelprev"))
+        val opPos = x.idx("plus", "minus", "times", "divided")
+        if (opPos >= 0 && c.count { digitToken.matches(it) } >= 2) add("calc", opPos)
+        add("brightness", x.idx("brightness"))
+        add("ringer", x.idx("silentmode", "vibratemode", "ringmode"))
+        add("battery", x.idx("battery"))
+        add("date", x.idx("askdate"))
+
         add("flashlight", x.idx("flashlight"))
         add("wifi", x.idx("wifi"))
         add("bluetooth", x.idx("bluetooth"))
@@ -81,6 +98,21 @@ object IntentParser {
         }
 
         if ("alarm" !in hits) add("time", x.idx("whattime"))
+
+        val others = hits.keys.any { it != "open_app" }
+        val navigateWord = x.has("navigate") || (x.has("maps") && contentNoSong.isNotEmpty() && !x.has("open"))
+        if (navigateWord) add("navigate", maxOf(x.idx("navigate"), x.idx("maps")))
+        if ((x.has("search") || x.has("google")) && !ytWord && !navigateWord) add("web_search", maxOf(x.idx("search"), x.idx("google")))
+        val ytIntent = when {
+            ytWord && contentNoSong.isNotEmpty() && !x.has("open") -> true
+            hasSong && (hasPlay || x.has("on")) && !others -> true
+            hasPlay && contentNoSong.isNotEmpty() && !others -> true
+            else -> false
+        }
+        if (ytIntent) add("youtube_play", maxOf(x.idx("song"), x.idx("youtube"), x.idx("play")))
+        // plain "প্লে করো" with nothing to play: carry on with the current media
+        if (hasPlay && contentNoSong.isEmpty() && !hasSong && !ytWord && !others) add("media", x.idx("play"))
+        if (x.has("shorts", "reels") && x.has("open", "on", "show", "play") && "swipe" !in hits) add("open_feed", x.idx("shorts", "reels"))
 
         val appPos = c.indices.firstOrNull {
             c[it] in Lexicon.appKeys &&
@@ -113,6 +145,20 @@ object IntentParser {
             "volume" -> volumeSlots(x, slots)
             "screen_wake" -> if (x.has("unlock")) slots["unlock"] = "1"
             "open_app" -> appSlots(x, slots)
+            "media" -> slots["action"] = mediaAction(x)
+            "swipe" -> slots["dir"] = if (x.c.indexOfLast { it == "reelprev" } > x.c.indexOfLast { it == "reelnext" }) "prev" else "next"
+            "calc" -> slots["expr"] = c.filter { digitToken.matches(it) || it in setOf("plus", "minus", "times", "divided", "point") }.joinToString(" ")
+            "brightness" -> levelSlots(x, slots)
+            "ringer" -> slots["mode"] = when {
+                x.has("silentmode") -> "silent"
+                x.has("vibratemode") -> "vibrate"
+                else -> "normal"
+            }
+            "navigate", "web_search" -> slots["query"] = queryRaw(x, keepSong = true).joinToString(" ")
+            "youtube_play" -> slots["query"] = queryRaw(x, keepSong = true).joinToString(" ").let { q ->
+                if (contentNoSong.isEmpty()) "" else q // only "গান": which song is not known
+            }
+            "open_feed" -> slots["feed"] = if (x.has("shorts")) "shorts" else "reels"
             "unknown" -> slots["text"] = text.trim()
         }
         if (hits.size >= 2 && primaryKey != "call" && primaryKey != null) {
@@ -206,6 +252,62 @@ object IntentParser {
             x.has("tomorrow") -> "tomorrow"
             x.has("today") -> "today"
             else -> "auto"
+        }
+    }
+
+    // ---------- everyday helpers ----------
+
+    private val digitToken = Regex("^\\d+$")
+    private val queryDrop = setOf(
+        "youtube", "app", "on", "off", "open", "play", "google", "search", "navigate", "maps", "sep", "cut", "hangup",
+        "whatsapp", "phone", "number", "call", "shorts", "reels", "show"
+    )
+    private val trimLeadingLatin = setOf("for", "to", "the", "a", "an", "please", "plz", "me", "my", "can", "could", "would", "hey", "set", "it", "now")
+    private val trimTrailingLatin = setOf("please", "plz", "now", "it")
+
+    private fun isBengali(s: String) = s.any { it in '\u0980'..'\u09FF' }
+
+    /** filler at the edge of a query: Bengali ones always, English only the polite/command-ish ones */
+    private fun edgeFiller(t: Tok, leading: Boolean): Boolean {
+        if (t.canon != "_f" && t.canon != "_v") return false
+        if (isBengali(t.raw)) return true
+        return t.raw in (if (leading) trimLeadingLatin else trimTrailingLatin)
+    }
+
+    /** the words that say WHAT (a song, a place, a search): command words are dropped, inner small words are kept ("Shape of You") */
+    private fun queryRaw(x: Ctx, keepSong: Boolean): List<String> {
+        val toks = x.toks.filter { it.canon !in queryDrop && (keepSong || it.canon != "song") }
+        var a = 0
+        var b = toks.size
+        while (a < b && edgeFiller(toks[a], leading = true)) a++
+        while (b > a && edgeFiller(toks[b - 1], leading = false)) b--
+        return toks.subList(a, b).map { it.raw }
+    }
+
+    /** what to say about the text of a reply such as "আরিজিত সিংয়ের গান" or "ঢাকা" (for follow-up questions) */
+    fun queryOf(text: String): String = queryRaw(Ctx(Canonicalizer.tokenize(TextNormalizer.normalize(text))), keepSong = true).joinToString(" ")
+
+    private fun mediaAction(x: Ctx): String = when {
+        x.has("mediapause") -> "pause"
+        x.has("medianext") -> "next"
+        x.has("mediaprev") -> "prev"
+        else -> "play"
+    }
+
+    private fun levelSlots(x: Ctx, slots: MutableMap<String, String>) {
+        val c = x.c
+        val upPos = c.indexOfLast { it == "up" || it == "louder" }
+        val downPos = c.indexOfLast { it == "down" || it == "quieter" }
+        val number = c.firstOrNull { smallNumber.matches(it) }?.toInt()?.coerceIn(0, 100)
+        when {
+            x.has("max") -> { slots["action"] = "set"; slots["level"] = "100" }
+            x.has("min") -> { slots["action"] = "set"; slots["level"] = "0" }
+            upPos >= 0 || downPos >= 0 -> {
+                slots["action"] = if (upPos > downPos) "up" else "down"
+                if (number != null) slots["delta"] = number.toString()
+            }
+            number != null -> { slots["action"] = "set"; slots["level"] = number.toString() }
+            else -> slots["action"] = "none"
         }
     }
 

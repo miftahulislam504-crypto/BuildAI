@@ -18,7 +18,7 @@ class ChainRunner(
 ) {
     companion object {
         fun defaultGap(p: Parsed): Long = when (p.intent) {
-            "open_app", "wifi", "bluetooth", "screen_wake" -> 1500L // let the screen / app come up first
+            "open_app", "wifi", "bluetooth", "screen_wake", "youtube_play", "open_feed", "navigate", "web_search" -> 1500L // let the screen / app come up first
             else -> 400L
         }
     }

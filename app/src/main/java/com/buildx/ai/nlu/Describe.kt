@@ -19,6 +19,26 @@ object Describe {
                 if (bn) "WhatsApp $kind${if (who != null) ": ${bnDigits(who)}" else ""}" else "WhatsApp $kind${if (who != null) " to $who" else ""}"
             }
             "take_photo" -> if (s["camera"] == "front") (if (bn) "সেলফি তোলা" else "take a selfie") else (if (bn) "ছবি তোলা" else "take a photo")
+            "media" -> when (s["action"]) {
+                "pause" -> if (bn) "গান থামানো" else "pause the music"
+                "next" -> if (bn) "পরের গান" else "next song"
+                "prev" -> if (bn) "আগের গান" else "previous song"
+                else -> if (bn) "গান চালু করা" else "resume playing"
+            }
+            "swipe" -> if (s["dir"] == "prev") (if (bn) "আগেরটায় স্ক্রল" else "scroll back") else (if (bn) "পরেরটায় স্ক্রল" else "scroll to the next")
+            "calc" -> if (bn) "হিসাব: ${s["expr"]}" else "calculate ${s["expr"]}"
+            "brightness" -> volume(s, bn).replace(if (bn) "ভলিউম" else "volume", if (bn) "ব্রাইটনেস" else "brightness").replace(if (bn) "মিউট" else "mute", if (bn) "ব্রাইটনেস" else "brightness")
+            "ringer" -> when (s["mode"]) {
+                "silent" -> if (bn) "সাইলেন্ট মোড" else "silent mode"
+                "vibrate" -> if (bn) "ভাইব্রেট মোড" else "vibrate mode"
+                else -> if (bn) "নরমাল মোড" else "normal mode"
+            }
+            "battery" -> if (bn) "ব্যাটারি কত" else "battery level"
+            "date" -> if (bn) "আজকের তারিখ" else "today's date"
+            "navigate" -> if (bn) "রাস্তা দেখানো: ${s["query"]}" else "navigate to ${s["query"]}"
+            "web_search" -> if (bn) "গুগলে খোঁজা: ${s["query"]}" else "search for ${s["query"]}"
+            "youtube_play" -> if (bn) "ইউটিউবে চালানো: ${s["query"]}" else "play on YouTube: ${s["query"]}"
+            "open_feed" -> if (s["feed"] == "shorts") (if (bn) "ইউটিউব শর্টস" else "YouTube Shorts") else (if (bn) "ইনস্টাগ্রাম রিলস" else "Instagram Reels")
             "end_call" -> if (bn) "কল কাটা" else "hang up"
             "alarm" -> alarm(s, bn)
             "flashlight" -> thing(if (bn) "ফ্ল্যাশলাইট" else "flashlight", s["state"], bn)
