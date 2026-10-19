@@ -39,6 +39,9 @@ import com.buildx.ai.device.DeviceInfo
 import com.buildx.ai.device.DeviceReport
 import com.buildx.ai.device.OemGuide
 import com.buildx.ai.device.OemSettings
+import com.buildx.ai.wake.ModelManager
+import com.buildx.ai.wake.VoiceLockStore
+import com.buildx.ai.wake.VoiceStrictness
 import com.buildx.ai.wake.WakeSensitivity
 import com.buildx.ai.call.SimHelper
 import com.buildx.ai.system.BackgroundLauncher
@@ -50,7 +53,6 @@ import com.buildx.ai.nlu.Describe
 import com.buildx.ai.nlu.IntentParser
 import com.buildx.ai.voice.Conversation
 import com.buildx.ai.voice.Speaker
-import com.buildx.ai.wake.ModelManager
 
 /** Test/setup screen. Plain Views on purpose: no extra dependencies, fewer things to break. */
 class MainActivity : Activity() {
@@ -75,6 +77,10 @@ class MainActivity : Activity() {
     private lateinit var popupBox: CheckBox
     private lateinit var autoStartBox: CheckBox
     private lateinit var stabilityStatus: TextView
+    private lateinit var voiceStatus: TextView
+    private lateinit var voiceBox: CheckBox
+    private lateinit var strictGroup: RadioGroup
+    private lateinit var vibrateBox: CheckBox
     private lateinit var sensGroup: RadioGroup
     private lateinit var nickInput: EditText
     private lateinit var simGroup: RadioGroup
@@ -97,7 +103,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "BuildX AI — ধাপ ৯"
+            text = "BuildX AI — ধাপ ১০"
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
         })
@@ -189,6 +195,53 @@ class MainActivity : Activity() {
         root.addView(adminStatus)
         root.addView(button("Device admin চালু করুন (শুধু স্ক্রিন লক করার জন্য)") { enableDeviceAdmin() })
         root.addView(button("Device admin বন্ধ করুন") { disableDeviceAdmin() })
+
+        root.addView(TextView(this).apply {
+            text = "আমার কণ্ঠ (শুধু আমার কণ্ঠে সাড়া)"
+            textSize = 16f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        voiceStatus = TextView(this)
+        root.addView(voiceStatus)
+        root.addView(TextView(this).apply {
+            text = "ধাপ: (১) কণ্ঠ-মডেল নামান (একবার, ~১৩ MB, ইন্টারনেট লাগে)। (২) শোনা চালু করে সার্ভিস সচল রাখুন। (৩) \"রেজিস্টার\" চেপে শান্ত জায়গায় ৫ বার \"Hey Build\" বলুন, প্রতিবার একটু থেমে। (৪) নিচের টিকবক্স চালু করুন।\n" +
+                "মনে রাখুন: কণ্ঠ শুধু \"Hey Build\" বলার সময় মেলানো হয়। তাই অন্য কেউ ডাকলে সাড়া দেবে না, কিন্তু আপনি ডাকার পর অন্য কেউ কমান্ড বললে সেটা আটকাবে না। ছোট বাক্যে মেলানো নিখুঁত না, তাই ভুল হলে নিচের কড়া/ঢিলা বদলান, লগে \"WAKE-VOICE দূরত্ব\" লাইন দেখে ঠিক করুন।"
+            textSize = 13f
+        })
+        root.addView(button("কণ্ঠ-মডেল নামান (~১৩ MB)") { downloadSpeakerModel() })
+        root.addView(button("আমার কণ্ঠ রেজিস্টার করুন (৫ বার \"Hey Build\")") { enrollVoice() })
+        voiceBox = CheckBox(this).apply {
+            text = "শুধু আমার কণ্ঠে সাড়া দাও"
+            isChecked = prefs.getBoolean("voiceLock", false)
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean("voiceLock", on).apply()
+                WakeService.instance?.reloadVoiceLock()
+                refreshVoice()
+            }
+        }
+        root.addView(voiceBox)
+        strictGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
+        for (lv in VoiceStrictness.values()) strictGroup.addView(RadioButton(this).apply { text = lv.label; id = 4000 + lv.ordinal })
+        strictGroup.check(4000 + prefs.getInt("voiceStrict", 1).coerceIn(0, 2))
+        strictGroup.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putInt("voiceStrict", checked - 4000).apply()
+            WakeService.instance?.reloadVoiceLock()
+        }
+        root.addView(strictGroup)
+        root.addView(button("আমার কণ্ঠ মুছুন") {
+            VoiceLockStore.clear(this)
+            voiceBox.isChecked = false
+            WakeService.instance?.reloadVoiceLock()
+            refreshVoice()
+        })
+        vibrateBox = CheckBox(this).apply {
+            text = "\"Hey Build\" বললে ভাইব্রেট করো"
+            isChecked = prefs.getBoolean("wakeVibrate", false)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("wakeVibrate", on).apply() }
+        }
+        root.addView(vibrateBox)
+        root.addView(button("ব্রাইটনেসের অনুমতি (সিস্টেম সেটিংস বদলানো)") { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) })
+        root.addView(button("সাইলেন্ট/ভাইব্রেট মোডের অনুমতি (Do Not Disturb)") { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) })
 
         root.addView(TextView(this).apply {
             text = "ফোন ও স্থায়িত্ব"
@@ -285,6 +338,7 @@ class MainActivity : Activity() {
         refreshA11y()
         refreshAssistant()
         refreshStability()
+        refreshVoice()
         refreshLog()
         LogStore.listener = { runOnUiThread { refreshLog() } }
     }
@@ -576,6 +630,50 @@ class MainActivity : Activity() {
         refreshAssistant()
     }
 
+    private fun refreshVoice() {
+        val model = ModelManager.isSpkReady(this)
+        val enrolled = VoiceLockStore.hasPrint(this)
+        val on = VoiceLockStore.load(this) != null
+        voiceStatus.text = "কণ্ঠ-মডেল: ${if (model) "✓" else "✗"}   রেজিস্টার: ${if (enrolled) "✓" else "✗"}   কণ্ঠ-লক: ${if (on) "চালু ✓" else "বন্ধ"}"
+    }
+
+    private fun downloadSpeakerModel() {
+        if (ModelManager.isSpkReady(this)) {
+            LogStore.add(this, "কণ্ঠ-মডেল আগেই নামানো আছে")
+            return
+        }
+        LogStore.add(this, "কণ্ঠ-মডেল নামছে...")
+        ModelManager.downloadSpk(this) { ok ->
+            LogStore.add(this, if (ok) "কণ্ঠ-মডেল প্রস্তুত। শোনা বন্ধ করে আবার চালু করুন, তারপর রেজিস্টার করুন" else "কণ্ঠ-মডেল নামানো যায়নি (ইন্টারনেট?)")
+            refreshVoice()
+        }
+    }
+
+    private fun enrollVoice() {
+        val svc = WakeService.instance
+        if (svc == null) {
+            LogStore.add(this, "আগে \"শোনা চালু করুন\" চাপুন, তারপর রেজিস্টার")
+            return
+        }
+        LogStore.add(this, "কণ্ঠ রেজিস্টার: ৫ বার \"Hey Build\" বলুন, প্রতিবার একটু থেমে (৯০ সেকেন্ড সময়)")
+        svc.startEnroll(5, { n, d ->
+            LogStore.add(this, "কণ্ঠ নমুনা $n/৫${d?.let { " (গড় থেকে দূরত্ব ${"%.2f".format(it)})" } ?: ""}")
+        }, { ok, msg ->
+            LogStore.add(this, (if (ok) "✓ " else "✗ ") + msg)
+            voiceBox.isChecked = VoiceLockStore.load(this) != null
+            refreshVoice()
+        })
+    }
+
+    private fun openSpecialPermission(action: String) {
+        try {
+            val i = if (action == Settings.ACTION_MANAGE_WRITE_SETTINGS) Intent(action, Uri.parse("package:$packageName")) else Intent(action)
+            startActivity(i)
+        } catch (e: Exception) {
+            LogStore.add(this, "সেটিংস খোলা যায়নি: ${e.message}")
+        }
+    }
+
     private fun refreshStability() {
         val maker = OemGuide.detect(Build.MANUFACTURER, Build.BRAND)
         val died = prefs.getBoolean("svcDied", false)
@@ -744,7 +842,8 @@ class MainActivity : Activity() {
         fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
         permStatus.text = "মাইক: ${tick(mic)}   নোটিফিকেশন: ${tick(notif)}   ব্যাটারি ছাড়: ${tick(battery)}\n" +
             "কল: ${tick(has(Manifest.permission.CALL_PHONE))}   কন্টাক্ট: ${tick(has(Manifest.permission.READ_CONTACTS))}   " +
-            "ক্যামেরা: ${tick(has(Manifest.permission.CAMERA))}   ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}"
+            "ক্যামেরা: ${tick(has(Manifest.permission.CAMERA))}   ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}\n" +
+            "সেটিংস বদল: ${tick(Settings.System.canWrite(this))}   DND: ${tick((getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted)}"
     }
 
     private fun refreshModelStatus() {

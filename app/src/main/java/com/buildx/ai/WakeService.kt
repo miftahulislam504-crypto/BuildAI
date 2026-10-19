@@ -29,6 +29,8 @@ import com.buildx.ai.voice.Speaker
 import com.buildx.ai.wake.ModelManager
 import com.buildx.ai.wake.VoskWakeEngine
 import com.buildx.ai.wake.WakeEngine
+import com.buildx.ai.wake.SpeakerMath
+import com.buildx.ai.wake.VoiceLockStore
 import com.buildx.ai.wake.WakeSensitivity
 
 /**
@@ -133,7 +135,12 @@ class WakeService : Service() {
         Thread {
             try {
                 val t0 = SystemClock.elapsedRealtime()
-                val eng = VoskWakeEngine(appCtx, path, WakeSensitivity.from(getSharedPreferences("buildx", MODE_PRIVATE).getInt("wakeSens", 1))) { main.post { onWake() } }
+                val spkPath = if (ModelManager.isSpkReady(appCtx)) ModelManager.spkDir(appCtx).absolutePath else null
+                val eng = VoskWakeEngine(
+                    appCtx, path, spkPath,
+                    WakeSensitivity.from(getSharedPreferences("buildx", MODE_PRIVATE).getInt("wakeSens", 1)),
+                    VoiceLockStore.load(appCtx)
+                ) { main.post { onWake() } }
                 val ms = SystemClock.elapsedRealtime() - t0
                 main.post {
                     if (!running) {
@@ -169,7 +176,7 @@ class WakeService : Service() {
      */
     fun triggerConversation(showPopup: Boolean) {
         if (!running || conversation != null || callActive) return
-        vibrate()
+        if (getSharedPreferences("buildx", MODE_PRIVATE).getBoolean("wakeVibrate", false)) vibrate()
         engine?.pause() // frees the microphone
 
         val sp = speaker
@@ -200,6 +207,43 @@ class WakeService : Service() {
         }
         engine?.start()
         LogStore.add(this, "LISTENING: আবার চালু")
+    }
+
+    // ---------- "only my voice" ----------
+
+    /** apply a changed on/off switch or strictness without restarting the service */
+    fun reloadVoiceLock() {
+        (engine as? VoskWakeEngine)?.voice = VoiceLockStore.load(applicationContext)
+        LogStore.add(this, "কণ্ঠ-লক: ${if (VoiceLockStore.load(applicationContext) != null) "চালু" else "বন্ধ"}")
+    }
+
+    /** the person says "Hey Build" [needed] times; the average of their voice-prints is saved */
+    fun startEnroll(needed: Int, progress: (Int, Double?) -> Unit, done: (Boolean, String) -> Unit) {
+        val eng = engine as? VoskWakeEngine
+        if (eng == null) return done(false, "আগে শোনা চালু করুন (সার্ভিস চলতে ও মডেল লোড হতে হবে)")
+        if (!eng.canHearVoices) return done(false, "কণ্ঠ-মডেল নামানো নেই বা লোড হয়নি। মডেল নামিয়ে শোনা বন্ধ করে আবার চালু করুন")
+        var active = true
+        val e = VoskWakeEngine.Enrollment(needed, { n, d -> main.post { progress(n, d) } }) { mean, samples, msg ->
+            main.post {
+                active = false
+                if (mean != null) {
+                    val base = SpeakerMath.calibratedBase(samples, mean)
+                    VoiceLockStore.save(this, mean, base)
+                    eng.voice = VoiceLockStore.load(this)
+                    done(true, "আপনার কণ্ঠ রেজিস্টার হয়েছে (সীমা ${"%.2f".format(base)})। এখন থেকে শুধু আপনার কণ্ঠে সাড়া দেবে")
+                } else {
+                    done(false, msg)
+                }
+            }
+        }
+        eng.beginEnroll(e)
+        main.postDelayed({
+            if (active) {
+                eng.cancelEnroll()
+                active = false
+                done(false, "সময় শেষ, রেজিস্টার হয়নি। শান্ত জায়গায় আবার চেষ্টা করুন")
+            }
+        }, 90_000)
     }
 
     // ---------- phone calls ----------
