@@ -11,8 +11,8 @@ android {
         applicationId = "com.buildx.ai"
         minSdk = 29
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.7.0"
+        versionCode = 10
+        versionName = "0.9.0"
 
         // Phones only; keeps the APK much smaller (Vosk + JNA ship native libs for every ABI).
         ndk {

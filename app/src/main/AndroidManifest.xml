@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Phase 4: alarm/timer, Wi-Fi state, opening apps from the background -->
     <uses-permission android:name="android.permission.SET_ALARM" />
+    <!-- Phase 9: photos (own camera screen) and optional self-enabling of Accessibility via ADB-granted permission -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
@@ -78,6 +82,16 @@
             android:name=".ChecklistActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".photo.PhotoActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:showWhenLocked="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+            android:turnScreenOn="true" />
+
         <service
             android:name=".a11y.BuildXAccessibilityService"
             android:exported="false"
@@ -90,6 +104,49 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_config" />
         </service>
+
+            <!-- Phase 8: BuildX as the phone's "Default digital assistant app" (popup over the lock screen, system keeps it alive) -->
+        <service
+            android:name=".assistant.BuildXVoiceInteractionService"
+            android:exported="true"
+            android:label="BuildX AI"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".assistant.BuildXSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <!-- Required by the assistant declaration; it only reports "not supported" (the app uses the phone's own recognizer) -->
+        <service
+            android:name=".assistant.BuildXRecognitionService"
+            android:exported="true"
+            android:label="BuildX AI">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
+        <!-- Only for "lock the screen" when Accessibility cannot be turned on. Can do nothing else (force-lock only). -->
+        <receiver
+            android:name=".admin.BuildXDeviceAdmin"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
