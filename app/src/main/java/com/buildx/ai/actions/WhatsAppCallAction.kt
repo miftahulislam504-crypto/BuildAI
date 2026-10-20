@@ -27,7 +27,7 @@ object WhatsAppCallAction : Action {
             contacts = AndroidContacts(ctx),
             placer = placer,
             nicknames = NicknameBook.parse(prefs.getString("nicknames", "") ?: ""),
-            confirm = prefs.getBoolean("confirmCall", true),
+            confirm = prefs.getBoolean("confirmCall", true) || params["via"] == "llm", // a call the model chose is always confirmed
             log = { LogStore.add(ctx, it) },
             viaBn = if (video) "WhatsApp-এ ভিডিও " else "WhatsApp-এ ",
             viaEn = if (video) " on WhatsApp video" else " on WhatsApp"

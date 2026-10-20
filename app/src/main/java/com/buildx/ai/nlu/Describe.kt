@@ -49,6 +49,15 @@ object Describe {
             "screen_lock" -> if (bn) "স্ক্রিন লক" else "lock the screen"
             "open_app" -> if (bn) "অ্যাপ খোলা: ${s["app"] ?: ""}" else "open ${s["app"] ?: "an app"}"
             "cancel" -> if (bn) "বাতিল" else "cancel"
+            "back" -> if (bn) "পেছনে যাওয়া" else "go back"
+            "home" -> if (bn) "হোমে যাওয়া" else "go home"
+            "recents" -> if (bn) "রিসেন্ট অ্যাপ" else "recent apps"
+            "notifications" -> if (bn) "নোটিফিকেশন দেখানো" else "show notifications"
+            "screenshot" -> if (bn) "স্ক্রিনশট নেওয়া" else "take a screenshot"
+            "read_screen" -> if (bn) "স্ক্রিন পড়ে শোনানো" else "read the screen"
+            "tap" -> if (bn) "ট্যাপ: ${s["text"] ?: ""}" else "tap ${s["text"] ?: ""}"
+            "type_text" -> if (bn) "টাইপ: ${s["text"] ?: ""}" else "type ${s["text"] ?: ""}"
+            "ui_task" -> if (bn) "স্ক্রিনে কাজ: ${s["goal"] ?: ""}" else "do on screen: ${s["goal"] ?: ""}"
             else -> s["text"] ?: ""
         }
     }

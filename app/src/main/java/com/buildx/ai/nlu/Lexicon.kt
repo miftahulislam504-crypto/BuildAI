@@ -74,6 +74,15 @@ object Lexicon {
         "lock" to "লক|lock|লকড",
         "unlock" to "আনলক|unlock",
         "show" to "দেখাও|দেখান|দেখি|show",
+        // ---- system buttons and on-screen actions (only when they are the whole sentence; see IntentParser.navOnly) ----
+        "goback" to "ব্যাক|back|ব্যাক যাও|ব্যাকে যাও|ব্যাক করো|ব্যাক চাপো|পেছনে যাও|পেছনে যান|পিছনে যাও|পিছনে যান|পেছনে|পিছনে|go back|press back|back button|ব্যাক বাটন",
+        "gohome" to "হোম|home|হোমে যাও|হোমে যান|হোম স্ক্রিন|হোম স্ক্রীন|হোম স্ক্রিনে যাও|হোম স্ক্রিনে যান|home screen|homescreen|go home|go to home|go to home screen|press home|home button|হোম বাটন",
+        "recents" to "রিসেন্ট অ্যাপস|রিসেন্ট অ্যাপ|রিসেন্ট এপ|রিসেন্টস|রিসেন্ট|recent apps|recent app|recents|recent|app switcher|চলমান অ্যাপ|সাম্প্রতিক অ্যাপ|সাম্প্রতিক অ্যাপস",
+        "notifs" to "নোটিফিকেশন|নোটিফিকেশনস|নোটিফিকেশন প্যানেল|নোটিফিকেশন বার|notifications|notification|notification panel|notification bar|notification shade",
+        "screenshot" to "স্ক্রিনশট|স্ক্রিন শট|স্ক্রিনশট নাও|স্ক্রিনশট নিন|স্ক্রিনশট তোলো|স্ক্রিনশট তুলুন|স্ক্রিন শট নাও|screenshot|screen shot|take screenshot|take a screenshot|take the screenshot|capture screen",
+        "readscreen" to "স্ক্রিনে কী আছে|স্ক্রিনে কি আছে|স্ক্রিন পড়ো|স্ক্রিন পড়ে শোনাও|স্ক্রিন পড়ে শোনান|read screen|read the screen|read my screen|whats on screen|whats on the screen|whats on my screen|what is on the screen|what is on my screen",
+        "tapword" to "ট্যাপ|tap|ক্লিক|click|চাপো|চাপ দাও|চাপুন|press|প্রেস",
+        "typeword" to "টাইপ|type",
         // ---- things ----
         "flashlight" to "ফ্ল্যাশলাইট|ফ্ল্যাশ লাইট|ফ্ল্যাশ|ফ্লাশলাইট|ফ্লাশ লাইট|ফ্লাশ|ফ্লেশলাইট|টর্চ|টর্চলাইট|টর্চ লাইট|torch|torchlight|torch light|flashlight|flash light|flash|লাইট|light|আলো",
         "wifi" to "ওয়াইফাই|ওয়াই ফাই|wifi|wi fi",

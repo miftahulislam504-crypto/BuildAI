@@ -9,8 +9,13 @@ import android.view.accessibility.AccessibilityEvent
 import com.buildx.ai.LogStore
 
 /**
- * Does nothing by itself. It exists so the assistant may (1) lock the screen and (2) tap the Wi-Fi/Bluetooth
- * switch on the settings panel. It never reads, stores or sends what is on the screen.
+ * Does nothing by itself: it only acts when a command asks for it. What it is used for:
+ *  - lock the screen, Back / Home / Recents / notifications / screenshot, swipe;
+ *  - tap the Wi-Fi/Bluetooth switch on the settings panel;
+ *  - on a spoken command ("tap Send", "read the screen", "type ...") read the screen locally and act on it;
+ *  - only if the person turned on the screen agent: the numbered list of what is on screen (never password
+ *    fields or money apps, long digit runs masked) is sent to their own server for the length of one task.
+ * It stores nothing. See [ScreenOps] and the agent package.
  */
 class BuildXAccessibilityService : AccessibilityService() {
 
@@ -49,6 +54,14 @@ class BuildXAccessibilityService : AccessibilityService() {
     fun lockScreen(): Boolean = performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
 
     fun goBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
+
+    fun goHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
+
+    fun openRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
+
+    fun openNotifications(): Boolean = performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+
+    fun takeScreenshot(): Boolean = performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
 
     /**
      * One swipe up the middle of the screen ([next] = content moves up: the next reel / short / page), or down ([next] = false).

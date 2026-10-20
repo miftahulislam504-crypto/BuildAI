@@ -43,6 +43,15 @@ object ActionRegistry {
         register(BluetoothAction)
         register(ScreenWakeAction)
         register(ScreenLockAction)
+        register(BackAction)
+        register(HomeAction)
+        register(RecentsAction)
+        register(NotificationsAction)
+        register(ScreenshotAction)
+        register(TapAction)
+        register(TypeTextAction)
+        register(ReadScreenAction)
+        register(UiTaskAction)
     }
 
     fun register(a: Action) {

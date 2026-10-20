@@ -39,6 +39,7 @@ import com.buildx.ai.device.DeviceInfo
 import com.buildx.ai.device.DeviceReport
 import com.buildx.ai.device.OemGuide
 import com.buildx.ai.device.OemSettings
+import com.buildx.ai.llm.AndroidLlm
 import com.buildx.ai.wake.ModelManager
 import com.buildx.ai.wake.VoiceLockStore
 import com.buildx.ai.wake.VoiceStrictness
@@ -70,6 +71,11 @@ class MainActivity : Activity() {
     private lateinit var langGroup: RadioGroup
     private lateinit var wakeLockBox: CheckBox
     private lateinit var confirmBox: CheckBox
+    private lateinit var llmBox: CheckBox
+    private lateinit var llmUrlInput: EditText
+    private lateinit var llmTokenInput: EditText
+    private lateinit var llmStatus: TextView
+    private lateinit var agentBox: CheckBox
     private lateinit var autoToggleBox: CheckBox
     private lateinit var a11yStatus: TextView
     private lateinit var assistStatus: TextView
@@ -287,6 +293,51 @@ class MainActivity : Activity() {
         }
         root.addView(nickInput)
         root.addView(button("উপনাম সেভ") { saveSettings(); LogStore.add(this@MainActivity, "উপনাম সেভ হয়েছে") })
+
+        root.addView(TextView(this).apply {
+            text = "LLM ফলব্যাক (ঐচ্ছিক, ইন্টারনেট লাগে)"
+            textSize = 16f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        root.addView(TextView(this).apply {
+            text = "চালু থাকলে, যে বাক্য অফলাইনে বোঝা যায় না শুধু সেই বাক্যের লেখাটুকু আপনার নিজের সার্ভারে (প্রক্সি) যায়। কন্টাক্ট বা অন্য কিছু যায় না। বন্ধ থাকলে কিছুই বাইরে যায় না।"
+        })
+        llmBox = CheckBox(this).apply {
+            text = "অবোধ্য কমান্ড LLM-কে জিজ্ঞেস করো"
+            isChecked = prefs.getBoolean(AndroidLlm.KEY_ENABLED, false)
+        }
+        root.addView(llmBox)
+        llmUrlInput = EditText(this).apply {
+            hint = "প্রক্সির ঠিকানা: https://.../api/assist"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(prefs.getString(AndroidLlm.KEY_URL, ""))
+        }
+        root.addView(llmUrlInput)
+        llmTokenInput = EditText(this).apply {
+            hint = "টোকেন (প্রক্সির APP_TOKEN)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(prefs.getString(AndroidLlm.KEY_TOKEN, ""))
+        }
+        root.addView(llmTokenInput)
+        root.addView(TextView(this).apply {
+            text = "স্ক্রিন-এজেন্ট (আলাদা সুইচ): বড় কাজ, যেমন \"WhatsApp-এ রহিমকে হাই পাঠাও\", Claude ধাপে ধাপে স্ক্রিন দেখে ট্যাপ ও টাইপ করে করে। চালু থাকলে কাজ চলার সময় স্ক্রিনের লেখা আপনার সার্ভারে যায়। পাসওয়ার্ডের স্ক্রিন ও টাকার অ্যাপ (বিকাশ, নগদ, ব্যাংক) কখনো পড়া বা পাঠানো হয় না, লম্বা সংখ্যা ঢেকে যায়। পাঠানো, কেনা, মোছা, কল: এসব বাটন চাপার আগে আপনাকে জিজ্ঞেস করে। নোটিফিকেশনে \"থামাও\" বোতাম থাকে। Accessibility চালু থাকতে হবে।"
+        })
+        agentBox = CheckBox(this).apply {
+            text = "স্ক্রিন-এজেন্ট চালু করো"
+            isChecked = prefs.getBoolean(AndroidLlm.KEY_AGENT, false)
+        }
+        root.addView(agentBox)
+        llmStatus = TextView(this)
+        root.addView(llmStatus)
+        root.addView(button("LLM সেটিং সেভ করো") {
+            saveSettings()
+            llmStatus.text = (if (llmBox.isChecked) "LLM চালু" else "LLM বন্ধ") + ", " + (if (agentBox.isChecked) "স্ক্রিন-এজেন্ট চালু" else "স্ক্রিন-এজেন্ট বন্ধ") + " (সেভ হয়েছে)"
+        })
+        root.addView(button("LLM সংযোগ টেস্ট") {
+            saveSettings()
+            llmStatus.text = "পরীক্ষা করছি…"
+            AndroidLlm.test(this) { llmStatus.text = it }
+        })
 
         root.addView(button("▶ শোনা শুরু (\"Hey BuildX\")") { startListening() })
         root.addView(button("■ শোনা বন্ধ") {
@@ -573,6 +624,10 @@ class MainActivity : Activity() {
             .putBoolean("assistPopup", popupBox.isChecked)
             .putBoolean("assistAutoStart", autoStartBox.isChecked)
             .putString("nicknames", nickInput.text.toString())
+            .putBoolean(AndroidLlm.KEY_ENABLED, llmBox.isChecked)
+            .putBoolean(AndroidLlm.KEY_AGENT, agentBox.isChecked)
+            .putString(AndroidLlm.KEY_URL, llmUrlInput.text.toString().trim())
+            .putString(AndroidLlm.KEY_TOKEN, llmTokenInput.text.toString().trim())
             .apply()
     }
 

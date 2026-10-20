@@ -2,6 +2,7 @@ package com.buildx.ai.nlu
 
 /**
  * [intent]: time, call, end_call, alarm, flashlight, wifi, bluetooth, volume, screen_wake, screen_lock,
+ * back, home, recents, notifications, screenshot, read_screen, tap, type_text,
  * open_app, cancel, unknown.  [slots] depend on the intent (see parse()).
  * [normalized] is the cleaned utterance, handy for fuzzy contact matching in Phase 3.
  * Slot "chain" (only when the sentence holds more than one command): intents in the order spoken.
@@ -16,7 +17,8 @@ object IntentParser {
     private val priority = listOf(
         "end_call", "call", "alarm", "take_photo", "media", "swipe", "calc", "flashlight", "wifi", "bluetooth",
         "brightness", "ringer", "volume", "screen", "battery", "date", "time", "navigate", "web_search",
-        "youtube_play", "open_feed", "open_app", "cancel"
+        "youtube_play", "open_feed", "open_app", "cancel",
+        "back", "home", "recents", "notifications", "screenshot", "read_screen", "type_text", "tap"
     )
     private val phoneNumber = Regex("^\\+?\\d+$")
     private val smallNumber = Regex("^\\d{1,3}$")
@@ -114,6 +116,8 @@ object IntentParser {
         if (hasPlay && contentNoSong.isEmpty() && !hasSong && !ytWord && !others) add("media", x.idx("play"))
         if (x.has("shorts", "reels") && x.has("open", "on", "show", "play") && "swipe" !in hits) add("open_feed", x.idx("shorts", "reels"))
 
+        navOnly(x)?.let { (name, pos) -> add(name, pos) }
+
         val appPos = c.indices.firstOrNull {
             c[it] in Lexicon.appKeys &&
                 !(c[it] == "settings" && ("wifi" in hits || "bluetooth" in hits)) &&
@@ -121,6 +125,15 @@ object IntentParser {
         } ?: -1
         if (appPos >= 0) add("open_app", appPos)
         else if (hits.isEmpty() && x.has("open")) add("open_app", x.idx("open"))
+
+        // "tap Send" / "type hello": only when nothing else matched, and the word sits at an edge of the sentence
+        var onScreenText: String? = null
+        if (hits.isEmpty()) {
+            onScreen(x)?.let { (name, words) ->
+                add(name, 0)
+                onScreenText = words
+            }
+        }
 
         if (hits.isEmpty()) add("cancel", x.idx("cancel"))
 
@@ -159,6 +172,7 @@ object IntentParser {
                 if (contentNoSong.isEmpty()) "" else q // only "গান": which song is not known
             }
             "open_feed" -> slots["feed"] = if (x.has("shorts")) "shorts" else "reels"
+            "tap", "type_text" -> onScreenText?.takeIf { it.isNotEmpty() }?.let { slots["text"] = it }
             "unknown" -> slots["text"] = text.trim()
         }
         if (hits.size >= 2 && primaryKey != "call" && primaryKey != null) {
@@ -174,6 +188,58 @@ object IntentParser {
         val m = LinkedHashMap<String, String>()
         callSlots(x, m)
         return m
+    }
+
+    // ---------- system buttons, tap, type ----------
+
+    private val navIntent = mapOf(
+        "goback" to "back", "gohome" to "home", "recents" to "recents", "notifs" to "notifications",
+        "screenshot" to "screenshot", "readscreen" to "read_screen"
+    )
+    private val navCanonOk = setOf("_f", "_v", "show", "open", "screen", "tapword")
+    private val navRawOk = setOf("যাও", "যান", "go", "চলো", "একটা", "একটি")
+
+    /**
+     * Back, Home, Recents, notifications, screenshot, read the screen: only when that is the WHOLE sentence
+     * (plus polite filler). "I want to go back to my home town" must stay unknown, not press Back.
+     */
+    private fun navOnly(x: Ctx): Pair<String, Int>? {
+        val found = x.c.withIndex().filter { it.value in navIntent }
+        if (found.map { it.value }.distinct().size != 1) return null
+        if (x.toks.any { it.canon !in navIntent && it.canon !in navCanonOk && it.raw !in navRawOk }) return null
+        return navIntent.getValue(found[0].value) to found[0].index
+    }
+
+    private val tapTrim = setOf("_f", "_v", "on", "sep")
+
+    /**
+     * "ট্যাপ করো সেন্ড", "tap on Send", "সেন্ড এ ট্যাপ করো", "টাইপ করো hello", "hello টাইপ করো".
+     * The tap / type word must be the first or the last real word. Returns the intent and the words it is about.
+     */
+    private fun onScreen(x: Ctx): Pair<String, String>? {
+        val toks = x.toks
+        fun filler(t: Tok) = t.canon == "_f" || t.canon == "_v"
+        val first = toks.indexOfFirst { !filler(it) }
+        val last = toks.indexOfLast { !filler(it) }
+        if (first < 0) return null
+        val (name, around) = when {
+            toks[first].canon == "typeword" -> "type_text" to toks.subList(first + 1, toks.size)
+            toks[first].canon == "tapword" -> "tap" to toks.subList(first + 1, toks.size)
+            toks[last].canon == "typeword" -> "type_text" to toks.subList(0, last)
+            toks[last].canon == "tapword" -> "tap" to toks.subList(0, last)
+            else -> return null
+        }
+        if (around.any { it.canon == "tapword" || it.canon == "typeword" }) return null
+        // typed words are kept as said (only the do-verb "করো" is dropped: "আমি আসছি" must keep its আমি);
+        // a tap target also loses "on", "the" and the like at its edges
+        var a = 0
+        var b = around.size
+        val drop: (Tok) -> Boolean = if (name == "tap") { t -> t.canon in tapTrim } else { t -> t.canon == "_v" }
+        while (a < b && drop(around[a])) a++
+        while (b > a && drop(around[b - 1])) b--
+        // a button label is a few words; a longer sentence that merely has "tap" in it is not a command
+        if (name == "tap" && b - a > 5) return null
+        return name to around.subList(a, b).joinToString(" ") { it.raw }
     }
 
     // ---------- screen ----------
