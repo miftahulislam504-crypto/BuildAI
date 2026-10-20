@@ -138,6 +138,11 @@
                 android:resource="@xml/recognition_service" />
         </service>
 
+        <!-- The "থামাও" button on the screen-agent notification. Not reachable from other apps. -->
+        <receiver
+            android:name=".agent.AgentStopReceiver"
+            android:exported="false" />
+
         <!-- Only for "lock the screen" when Accessibility cannot be turned on. Can do nothing else (force-lock only). -->
         <receiver
             android:name=".admin.BuildXDeviceAdmin"

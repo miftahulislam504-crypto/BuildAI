@@ -1,0 +1,8 @@
+{
+  "name": "buildx-llm-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tiny proxy between the BuildX AI Android app and the Claude API. Keeps the API key off the phone.",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" }
+}

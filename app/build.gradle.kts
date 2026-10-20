@@ -38,4 +38,6 @@ dependencies {
 
     // Unit tests for the command parser (pure Kotlin, run on the JVM; no phone needed).
     testImplementation("junit:junit:4.13.2")
+    // org.json is part of Android at runtime, but the stub used by JVM unit tests throws "not mocked".
+    testImplementation("org.json:json:20231013")
 }
