@@ -35,7 +35,7 @@ class ChainSplitterTest {
     @Test fun twoAppsInARow() = check("ইউটিউব খুলে ফেসবুক খোলো", "open_app[app=youtube", "open_app[app=facebook")
     @Test fun sameThingTwice() = check("ভলিউম কমাও আর ভলিউম বাড়াও", "volume[action=down", "volume[action=up")
     @Test fun wakeMeIsStillAnAlarm() = check("ভোর ৫টায় আমাকে জাগিয়ে দিও আর টর্চ জ্বালাও", "alarm[hour=5", "flashlight[state=on")
-    @Test fun unknownStepIsKept() = check("টর্চ জ্বালাও আর আবহাওয়া বলো", "flashlight[state=on", "unknown")
+    @Test fun unknownStepIsKept() = check("টর্চ জ্বালাও আর জোক বলো", "flashlight[state=on", "unknown")
 
     // single commands must stay single
     @Test fun singleCommands() {

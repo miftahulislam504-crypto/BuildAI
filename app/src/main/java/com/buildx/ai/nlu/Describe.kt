@@ -57,6 +57,45 @@ object Describe {
             "read_screen" -> if (bn) "স্ক্রিন পড়ে শোনানো" else "read the screen"
             "tap" -> if (bn) "ট্যাপ: ${s["text"] ?: ""}" else "tap ${s["text"] ?: ""}"
             "type_text" -> if (bn) "টাইপ: ${s["text"] ?: ""}" else "type ${s["text"] ?: ""}"
+            "send_sms", "send_whatsapp" -> {
+                val who = s["target"] ?: s["number"]
+                val ch = if (p.intent == "send_sms") (if (bn) "এসএমএস" else "SMS") else "WhatsApp"
+                if (bn) "$ch পাঠানো${if (who != null) ": ${bnDigits(who)}" else ""}" else "send $ch${if (who != null) " to $who" else ""}"
+            }
+            "read_sms" -> if (bn) "মেসেজ পড়ে শোনানো" else "read messages"
+            "read_notifications" -> if (bn) "নোটিফিকেশন পড়ে শোনানো" else "read notifications"
+            "who_calling" -> if (bn) "কে কল করছে" else "who is calling"
+            "note" -> when (s["op"]) {
+                "read" -> if (bn) "নোট পড়া" else "read notes"
+                "clear" -> if (bn) "নোট মোছা" else "delete notes"
+                else -> if (bn) "নোট: ${s["text"] ?: ""}" else "note: ${s["text"] ?: ""}"
+            }
+            "remind" -> {
+                val rel = s["in_minutes"]
+                val at = when {
+                    rel != null -> if (bn) "${bnDigits(rel)} মিনিট পরে" else "in $rel min"
+                    s["hour"] != null -> "${s["hour"]}:${(s["minute"] ?: "0").padStart(2, '0')}".let { if (bn) bnDigits(it) else it }
+                    else -> if (bn) "সময় বলা হয়নি" else "no time"
+                }
+                if (bn) "রিমাইন্ডার ($at): ${s["text"] ?: ""}" else "remind ($at): ${s["text"] ?: ""}"
+            }
+            "calendar_event" -> if (bn) "ক্যালেন্ডার: ${s["title"] ?: ""}" else "calendar: ${s["title"] ?: ""}"
+            "weather" -> if (bn) "আবহাওয়া${s["city"]?.let { ": $it" } ?: ""}" else "weather${s["city"]?.let { " in $it" } ?: ""}"
+            "convert" -> if (bn) "বদলানো: ${bnDigits(s["value"] ?: "")} ${s["from"] ?: ""} → ${s["to"] ?: "?"}" else "convert ${s["value"]} ${s["from"]} to ${s["to"] ?: "?"}"
+            "dnd" -> thing(if (bn) "ডু নট ডিস্টার্ব" else "Do Not Disturb", s["state"], bn)
+            "airplane" -> thing(if (bn) "এয়ারপ্লেন মোড" else "airplane mode", s["state"], bn)
+            "mobile_data" -> thing(if (bn) "মোবাইল ডেটা" else "mobile data", s["state"], bn)
+            "hotspot" -> thing(if (bn) "হটস্পট" else "hotspot", s["state"], bn)
+            "routine" -> {
+                val n = s["name"] ?: ""
+                when (s["op"]) {
+                    "list" -> if (bn) "রুটিনের তালিকা" else "list routines"
+                    "save" -> if (bn) "রুটিন বানানো: $n" else "create routine: $n"
+                    "delete" -> if (bn) "রুটিন মোছা: $n" else "delete routine: $n"
+                    "schedule", "power", "bt", "untrigger" -> if (bn) "রুটিনের অটো-স্টার্ট: $n" else "routine trigger: $n"
+                    else -> if (bn) "রুটিন চালানো: $n" else "run routine: $n"
+                }
+            }
             "ui_task" -> if (bn) "স্ক্রিনে কাজ: ${s["goal"] ?: ""}" else "do on screen: ${s["goal"] ?: ""}"
             else -> s["text"] ?: ""
         }

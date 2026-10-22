@@ -132,6 +132,28 @@ object LlmPlanParser {
                 }
                 slots.putIfAbsent("when", "auto")
             }
+            "remind", "calendar_event" -> {
+                if (intent == "remind" && slots.containsKey("in_minutes")) {
+                    slots.remove("hour")
+                    slots.remove("minute")
+                } else if (slots.containsKey("hour")) {
+                    if (!slots.containsKey("minute")) slots["minute"] = "0"
+                    slots["ambiguous"] = "false" // 24-hour time from the model
+                }
+                slots.putIfAbsent("when", "auto")
+            }
+            "convert" -> {
+                val v = slots["value"]?.toDoubleOrNull() ?: return false
+                if (v.isNaN() || v.isInfinite()) return false
+                val from = slots["from"].orEmpty()
+                val to = slots["to"]
+                if (!com.buildx.ai.system.Units.known(from)) return false
+                if (to != null && !com.buildx.ai.system.Units.sameKind(from, to)) return false
+            }
+            "send_sms", "send_whatsapp" -> {
+                val n = slots["number"]
+                if (n != null && !phone.matches(n)) return false
+            }
             "call", "whatsapp_call" -> {
                 val n = slots["number"]
                 if (n != null && !phone.matches(n)) return false

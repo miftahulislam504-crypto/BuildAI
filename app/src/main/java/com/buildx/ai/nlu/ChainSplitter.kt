@@ -26,11 +26,18 @@ object ChainSplitter {
         "brightness" -> "brightness"
         "silentmode", "vibratemode", "ringmode" -> "ringer"
         "battery" -> "battery"
+        "dnd" -> "dnd"
+        "airplane" -> "airplane"
+        "mobiledata" -> "mobile_data"
+        "hotspot" -> "hotspot"
         "askdate" -> "date"
         "navigate" -> "navigate"
         "shorts", "reels" -> "open_feed"
         else -> if (canon in Lexicon.appKeys) "open_app" else null
     }
+
+    /** true if the token starts a command of its own (used to decide whether a sentence is one free-text command) */
+    fun isTrigger(canon: String): Boolean = triggerOf(canon) != null
 
     private val verbish = setOf("_v", "open", "on", "off", "up", "down", "cut", "wake", "max", "min", "toggle", "show")
     private val structural = setOf("_f", "_v", "sep")

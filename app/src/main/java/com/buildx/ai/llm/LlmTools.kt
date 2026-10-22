@@ -148,6 +148,81 @@ object LlmTools {
         Tool("screenshot", "Take a screenshot."),
         Tool("read_screen", "Read out the text that is on the screen right now."),
         Tool(
+            "send_sms", "Send an SMS text message to a saved contact or a phone number. The app itself reads the text back and asks the user to confirm before anything is sent.",
+            listOf(target, number, Slot("text", "The message to send, in the user's own words, without the instruction part.", Kind.TEXT, max = 500))
+        ),
+        Tool(
+            "send_whatsapp", "Send a WhatsApp text message to a saved contact or a phone number. The app itself reads the text back and asks the user to confirm before anything is sent.",
+            listOf(target, number, Slot("text", "The message to send, in the user's own words, without the instruction part.", Kind.TEXT, max = 500))
+        ),
+        Tool("read_sms", "Read out the user's unread SMS messages."),
+        Tool("read_notifications", "Read out the notifications that are showing on the phone right now."),
+        Tool("who_calling", "Say who is calling right now (the incoming call)."),
+        Tool(
+            "note", "Save a note, read the saved notes aloud, or delete all notes.",
+            listOf(
+                pick("op", "add to save a note, read to read the notes, clear to delete all of them.", "add", "read", "clear", required = true),
+                Slot("text", "The note, for op=add, in the user's own words.", Kind.TEXT, max = 500)
+            )
+        ),
+        Tool(
+            "remind", "Remind the user of something at a clock time or after a while, with a notification. Give hour (and minute) OR in_minutes, never both.",
+            listOf(
+                Slot("text", "What to remind the user of, in their own words (for example: call mom).", Kind.TEXT, max = 200, required = true),
+                num("hour", "Hour in 24-hour time (5 pm is 17).", 0, 23),
+                num("minute", "Minute, 0 if the user gave none.", 0, 59),
+                num("in_minutes", "Remind after this many minutes.", 1, 43200),
+                pick("when", "Which day, only if the user said. Omit otherwise.", "auto", "today", "tomorrow", "day_after")
+            )
+        ),
+        Tool(
+            "calendar_event", "Add an event to the calendar app at a clock time. The calendar's own screen opens filled in.",
+            listOf(
+                Slot("title", "The event's name, in the user's own words.", Kind.TEXT, max = 120, required = true),
+                num("hour", "Hour in 24-hour time.", 0, 23),
+                num("minute", "Minute, 0 if the user gave none.", 0, 59),
+                pick("when", "Which day, only if the user said. Omit otherwise.", "auto", "today", "tomorrow", "day_after")
+            )
+        ),
+        Tool(
+            "weather", "Say the weather forecast for a city, today or tomorrow.",
+            listOf(
+                Slot("city", "The city or district as the user said it. Omit if none was named.", Kind.TEXT, max = 60),
+                pick("when", "today (default) or tomorrow.", "today", "tomorrow")
+            )
+        ),
+        Tool(
+            "convert", "Convert a number between units or currencies, for example km to miles, kg to pounds, dollars to taka.",
+            listOf(
+                Slot("value", "The number to convert, digits only (a decimal point is fine).", Kind.TEXT, max = 20, required = true),
+                pick("from", "The unit or currency the number is in. maund and ser are the Bangladeshi mon and ser.", "km", "m", "cm", "mm", "mi", "ft", "inch", "kg", "g", "lb", "oz", "maund", "ser", "bhori", "l", "ml", "gal", "c", "f", "kb", "mb", "gb", "usd", "bdt", "eur", "gbp", "inr", "sar", "aed", "jpy", "cny", "myr", "kwd", required = true),
+                pick("to", "The unit or currency to convert to. Omit if the user did not say.", "km", "m", "cm", "mm", "mi", "ft", "inch", "kg", "g", "lb", "oz", "maund", "ser", "bhori", "l", "ml", "gal", "c", "f", "kb", "mb", "gb", "usd", "bdt", "eur", "gbp", "inr", "sar", "aed", "jpy", "cny", "myr", "kwd")
+            )
+        ),
+        Tool(
+            "dnd", "Turn Do Not Disturb on or off.",
+            listOf(pick("state", "on, off, or toggle if the user did not say.", "on", "off", "toggle"))
+        ),
+        Tool(
+            "airplane", "Turn airplane (flight) mode on or off. 'open' only opens its settings.",
+            listOf(pick("state", "on, off or open.", "on", "off", "open"))
+        ),
+        Tool(
+            "mobile_data", "Turn mobile data on or off. 'open' only opens its settings.",
+            listOf(pick("state", "on, off or open.", "on", "off", "open"))
+        ),
+        Tool(
+            "hotspot", "Open the Wi-Fi hotspot settings. The phone cannot switch the hotspot itself, the user taps the toggle.",
+            listOf(pick("state", "on, off or toggle: only said back to the user.", "on", "off", "toggle"))
+        ),
+        Tool(
+            "routine", "Run one of the user's saved routines (a named list of steps, like Good Morning), or list their names. Never invent a routine name: use list first if unsure.",
+            listOf(
+                pick("op", "run to run a routine, list to say which routines exist.", "run", "list", required = true),
+                Slot("name", "The routine's name as the user said it, for op=run.", Kind.TEXT, max = 40)
+            )
+        ),
+        Tool(
             "tap", "Tap the button, link or item on the current screen whose label matches the words.",
             listOf(Slot("text", "The visible label of what to tap, exactly as the user said it.", Kind.TEXT, max = 80, required = true))
         ),
@@ -158,7 +233,7 @@ object LlmTools {
         Tool(
             "ui_task",
             "Do a multi-step job by operating the screen: look at it, tap, type and scroll until done. " +
-                "Use only when no single tool above does it, for example sending a message inside an app. " +
+                "Use only when no single tool above does it, for example filling in a form inside an app. " +
                 "If the app is not open yet, call open_app first, in the same plan.",
             listOf(Slot("goal", "What the user wants done, as one clear sentence, with names and message text exactly as said.", Kind.TEXT, max = 300, required = true)),
             agent = true

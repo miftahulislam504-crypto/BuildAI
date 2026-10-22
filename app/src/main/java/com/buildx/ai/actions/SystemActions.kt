@@ -338,7 +338,7 @@ object AlarmAction : Action {
 // Android 10+ does not let apps switch them. Without the Accessibility service we open the panel and say so;
 // with it (and "auto toggle" on) we also tap the switch and confirm with the phone's own state.
 
-private fun panel(
+internal fun panel(
     ac: ActionContext,
     thingBn: String,
     thingEn: String,

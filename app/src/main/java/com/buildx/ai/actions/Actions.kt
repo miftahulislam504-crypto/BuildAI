@@ -52,6 +52,21 @@ object ActionRegistry {
         register(TypeTextAction)
         register(ReadScreenAction)
         register(UiTaskAction)
+        register(ConvertAction)
+        register(WeatherAction)
+        register(NoteAction)
+        register(RemindAction)
+        register(CalendarEventAction)
+        register(DndAction)
+        register(AirplaneAction)
+        register(MobileDataAction)
+        register(HotspotAction)
+        register(ReadNotificationsAction)
+        register(WhoCallingAction)
+        register(ReadSmsAction)
+        register(SendSmsAction)
+        register(SendWhatsAppAction)
+        register(RoutineAction)
     }
 
     fun register(a: Action) {

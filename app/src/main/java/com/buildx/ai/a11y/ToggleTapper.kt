@@ -63,7 +63,7 @@ object ToggleTapper {
         fun find(tries: Int) {
             val root = svc.rootInActiveWindow
             val labeled = findSwitch(root, kind, labeledOnly = true)
-            val sw = labeled ?: if (tries <= FIND_TRIES - FALLBACK_AFTER) findSwitch(root, kind, labeledOnly = false) else null
+            val sw = labeled ?: if (tries <= FIND_TRIES - FALLBACK_AFTER && ToggleLabels.firstSwitchOk(kind)) findSwitch(root, kind, labeledOnly = false) else null
             if (sw == null) {
                 if (tries <= 0) {
                     dump(svc, root)

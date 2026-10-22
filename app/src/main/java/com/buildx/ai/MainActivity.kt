@@ -47,6 +47,7 @@ import com.buildx.ai.wake.WakeSensitivity
 import com.buildx.ai.call.SimHelper
 import com.buildx.ai.system.BackgroundLauncher
 import com.buildx.ai.contacts.AndroidContacts
+import com.buildx.ai.notif.BuildXNotificationListener
 import com.buildx.ai.contacts.NameMatcher
 import com.buildx.ai.contacts.NicknameBook
 import com.buildx.ai.nlu.CommandPipeline
@@ -248,6 +249,7 @@ class MainActivity : Activity() {
         root.addView(vibrateBox)
         root.addView(button("ব্রাইটনেসের অনুমতি (সিস্টেম সেটিংস বদলানো)") { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) })
         root.addView(button("সাইলেন্ট/ভাইব্রেট মোডের অনুমতি (Do Not Disturb)") { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) })
+        root.addView(button("নোটিফিকেশন পড়ার অনুমতি (\"নোটিফিকেশন পড়ো\", \"কে কল করছে\")") { openSpecialPermission(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) })
 
         root.addView(TextView(this).apply {
             text = "ফোন ও স্থায়িত্ব"
@@ -545,8 +547,10 @@ class MainActivity : Activity() {
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.CAMERA
-        ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            Manifest.permission.CAMERA,
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.READ_SMS
+        ).plus(if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyList()).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) {
             LogStore.add(this, "কল ও কন্টাক্টের পারমিশন আগেই দেওয়া আছে")
         } else {
@@ -759,6 +763,9 @@ class MainActivity : Activity() {
             "নোটিফিকেশন" to (Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)),
             "কল" to has(Manifest.permission.CALL_PHONE),
             "কন্টাক্ট" to has(Manifest.permission.READ_CONTACTS),
+            "এসএমএস পাঠানো" to has(Manifest.permission.SEND_SMS),
+            "এসএমএস পড়া" to has(Manifest.permission.READ_SMS),
+            "নোটিফিকেশন পড়া" to BuildXNotificationListener.isEnabledInSettings(this),
             "ফোন-অবস্থা" to has(Manifest.permission.READ_PHONE_STATE),
             "ব্যাটারি ছাড়" to pm.isIgnoringBatteryOptimizations(packageName),
             "ওভারলে" to BackgroundLauncher.canOverlay(this),
@@ -898,6 +905,7 @@ class MainActivity : Activity() {
         permStatus.text = "মাইক: ${tick(mic)}   নোটিফিকেশন: ${tick(notif)}   ব্যাটারি ছাড়: ${tick(battery)}\n" +
             "কল: ${tick(has(Manifest.permission.CALL_PHONE))}   কন্টাক্ট: ${tick(has(Manifest.permission.READ_CONTACTS))}   " +
             "ক্যামেরা: ${tick(has(Manifest.permission.CAMERA))}   ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}\n" +
+            "এসএমএস পাঠানো: ${tick(has(Manifest.permission.SEND_SMS))}   এসএমএস পড়া: ${tick(has(Manifest.permission.READ_SMS))}   নোটিফিকেশন পড়া: ${tick(BuildXNotificationListener.isEnabledInSettings(this))}\n" +
             "সেটিংস বদল: ${tick(Settings.System.canWrite(this))}   DND: ${tick((getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted)}"
     }
 

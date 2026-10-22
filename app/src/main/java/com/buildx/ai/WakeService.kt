@@ -63,6 +63,7 @@ class WakeService : Service() {
     private var startedAt = 0L
     private var lang = "bn-BD"
     private var callWatcher: CallWatcher? = null
+    private var routineEvents: com.buildx.ai.routine.RoutineEventReceiver? = null
     private var callActive = false
 
     private val batteryTick = object : Runnable {
@@ -120,6 +121,7 @@ class WakeService : Service() {
 
         speaker = Speaker(this).also { it.init(lang) }
         startCallWatch()
+        routineEvents = com.buildx.ai.routine.RoutineEventReceiver.register(this)
         logBattery()
         main.postDelayed(batteryTick, BATTERY_LOG_MS)
         refreshTile()
@@ -278,6 +280,13 @@ class WakeService : Service() {
         }
     }
 
+    /** says [text] out loud for something that started by itself (a routine); the wake engine pauses while it talks */
+    fun announce(text: String) {
+        if (!running || callActive || conversation != null) return
+        engine?.pause()
+        speakThenResume(text)
+    }
+
     private fun speakThenResume(sentence: String) {
         val sp = speaker
         if (sp == null) {
@@ -349,6 +358,8 @@ class WakeService : Service() {
         conversation = null
         callWatcher?.stop()
         callWatcher = null
+        com.buildx.ai.routine.RoutineEventReceiver.unregister(this, routineEvents)
+        routineEvents = null
         getSharedPreferences("buildx", MODE_PRIVATE).edit().putBoolean("svcActive", false).apply()
         CallTracker.shared.announce = null
         engine?.release()

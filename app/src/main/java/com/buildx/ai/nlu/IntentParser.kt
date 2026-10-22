@@ -15,9 +15,10 @@ data class Parsed(val intent: String, val slots: Map<String, String>, val normal
 object IntentParser {
 
     private val priority = listOf(
-        "end_call", "call", "alarm", "take_photo", "media", "swipe", "calc", "flashlight", "wifi", "bluetooth",
+        "end_call", "who_calling", "call", "alarm", "take_photo", "media", "swipe", "calc", "flashlight",
+        "hotspot", "airplane", "mobile_data", "dnd", "wifi", "bluetooth",
         "brightness", "ringer", "volume", "screen", "battery", "date", "time", "navigate", "web_search",
-        "youtube_play", "open_feed", "open_app", "cancel",
+        "youtube_play", "open_feed", "read_notifications", "read_sms", "open_app", "cancel",
         "back", "home", "recents", "notifications", "screenshot", "read_screen", "type_text", "tap"
     )
     private val phoneNumber = Regex("^\\+?\\d+$")
@@ -42,6 +43,11 @@ object IntentParser {
     fun parseChain(text: String): List<Parsed> {
         val norm = TextNormalizer.normalize(text)
         val toks = Canonicalizer.tokenize(norm)
+        // a message, note, reminder... swallows the rest of the sentence ("রুটি আর ডিম নোট করো" is one note)
+        if (FreeText.parse(toks) != null) {
+            val pos = FreeText.triggerPos(toks)
+            if (toks.subList(0, pos).none { ChainSplitter.isTrigger(it.canon) }) return listOf(parseCtx(Ctx(toks), norm, text))
+        }
         val segments = ChainSplitter.split(toks)
         if (segments.size <= 1) return listOf(parseCtx(Ctx(toks), norm, text))
         return segments.map { seg ->
@@ -53,6 +59,7 @@ object IntentParser {
 
     private fun parseCtx(x: Ctx, norm: String, text: String): Parsed {
         val c = x.c
+        FreeText.parse(x.toks)?.let { return Parsed(it.intent, it.slots, norm) }
 
         // ---- which intents are present, and where ----
         val hits = LinkedHashMap<String, Int>()
@@ -90,6 +97,13 @@ object IntentParser {
         add("date", x.idx("askdate"))
 
         add("flashlight", x.idx("flashlight"))
+        add("hotspot", x.idx("hotspot"))
+        add("airplane", x.idx("airplane"))
+        add("mobile_data", x.idx("mobiledata"))
+        add("dnd", x.idx("dnd"))
+        add("who_calling", x.idx("whocalls"))
+        if (x.has("notifs") && x.has("readword", "newword")) add("read_notifications", x.idx("notifs"))
+        if (x.has("messages") && x.has("readword", "newword") && !x.has("open", "app")) add("read_sms", x.idx("messages"))
         add("wifi", x.idx("wifi"))
         add("bluetooth", x.idx("bluetooth"))
         add("volume", x.idx("volume", "mute", "unmute", "louder", "quieter"))
@@ -155,6 +169,8 @@ object IntentParser {
             "alarm" -> alarmSlots(x, slots)
             "flashlight" -> slots["state"] = onOff(x, openAsOn = true) ?: "toggle"
             "wifi", "bluetooth" -> slots["state"] = onOff(x, openAsOn = false) ?: "open"
+            "dnd", "airplane", "mobile_data", "hotspot" ->
+                slots["state"] = onOff(x, openAsOn = false) ?: if (x.has("open")) "open" else "toggle"
             "volume" -> volumeSlots(x, slots)
             "screen_wake" -> if (x.has("unlock")) slots["unlock"] = "1"
             "open_app" -> appSlots(x, slots)
@@ -275,7 +291,7 @@ object IntentParser {
 
     // ---------- call ----------
 
-    private val notName = setOf("call", "phone", "number", "_f", "_v", "sep", "cut", "hangup", "whatsapp", "video", "on")
+    private val notName = setOf("call", "phone", "number", "_f", "_v", "sep", "cut", "hangup", "whatsapp", "video", "on", "again")
 
     private fun callSlots(x: Ctx, slots: MutableMap<String, String>) {
         // phone number: the longest run of digit tokens (digits spoken one by one are joined)

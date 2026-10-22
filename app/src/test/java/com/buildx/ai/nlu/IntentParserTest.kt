@@ -201,7 +201,7 @@ class IntentParserTest {
     }
 
     @Test fun unknown() {
-        ok("আজকের আবহাওয়া কেমন", "unknown", "text=আজকের আবহাওয়া কেমন")
+        ok("আজকের ম্যাচের খবর কী", "unknown", "text=আজকের ম্যাচের খবর কী")
         ok("hello there", "unknown")
         ok("", "unknown")
         ok("   ", "unknown")
