@@ -33,6 +33,17 @@ object ModelManager {
 
     fun isSpkReady(ctx: Context): Boolean = File(spkDir(ctx), ".ok").exists()
 
+    /** every English word the wake model knows (to check a custom wake phrase); null if the model has no word list */
+    fun vocabulary(ctx: Context): Set<String>? {
+        val f = File(File(modelDir(ctx), "graph"), "words.txt")
+        if (!f.exists()) return null
+        return try {
+            f.bufferedReader().useLines { WakePhrase.vocabularyFrom(it) }.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Runs on a background thread; [onDone] is called on the main thread. */
     fun download(ctx: Context, onDone: (Boolean) -> Unit) = fetch(ctx, MODEL_NAME, MODEL_URL, onDone)
 

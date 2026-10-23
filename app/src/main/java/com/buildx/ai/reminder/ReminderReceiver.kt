@@ -66,6 +66,7 @@ class ReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             ReminderScheduler.rescheduleAll(context)
+            DatedAlarmScheduler.rescheduleAll(context)
             com.buildx.ai.routine.RoutineStore.rescheduleAll(context)
         }
     }

@@ -19,7 +19,7 @@ interface WakeEngine {
 
 /**
  * Wake word via a Vosk recognizer restricted to a tiny grammar, so it only has to tell
- * "hey build x" apart from everything else ([unk]). Offline, free, no account, no training.
+ * the wake phrase ("hey build" unless the person chose another) apart from everything else ([unk]). Offline, free, no account, no training.
  *
  * The constructor loads the model (slow, ~300 MB RAM): create it on a background thread.
  * Callbacks from SpeechService arrive on the main thread.
@@ -30,6 +30,8 @@ class VoskWakeEngine(
     spkPath: String?,
     private val sensitivity: WakeSensitivity,
     @Volatile var voice: VoiceLock?,
+    private val phrase: WakePhrase = WakePhrase.DEFAULT,
+    private val lowPower: Boolean = false,
     private val onWake: () -> Unit
 ) : WakeEngine, RecognitionListener {
 
@@ -43,10 +45,11 @@ class VoskWakeEngine(
         }
     }
     private var service: SpeechService? = null
+    private var gated: GatedLoop? = null
     private var lastFire = 0L
 
-    /** "hey build" is the phrase; the X forms are accepted so "Hey BuildX" is not thrown away as unknown speech */
-    private val grammar = "[\"hey build\", \"hey build x\", \"hey build ex\", \"[unk]\"]"
+    /** the phrase (for "hey build" also the X forms, so "Hey BuildX" is not thrown away as unknown speech) */
+    private val grammar = phrase.grammarJson()
 
     /** collecting voice samples for "only my voice" */
     class Enrollment(val needed: Int, val onProgress: (Int, Double?) -> Unit, val onDone: (DoubleArray?, List<DoubleArray>, String) -> Unit) {
@@ -69,12 +72,26 @@ class VoskWakeEngine(
         enrollment = null
     }
 
+    private fun newRecognizer(): Recognizer {
+        val rec = Recognizer(model, 16000.0f, grammar)
+        rec.setWords(true) // word confidences, used by the strict level
+        spkModel?.let { rec.setSpeakerModel(it) } // adds a voice-print ("spk") to every final result
+        return rec
+    }
+
     override fun start() {
-        if (service != null) return
+        if (service != null || gated != null) return
         try {
-            val rec = Recognizer(model, 16000.0f, grammar)
-            rec.setWords(true) // word confidences, used by the strict level
-            spkModel?.let { rec.setSpeakerModel(it) } // adds a voice-print ("spk") to every final result
+            val rec = newRecognizer()
+            if (lowPower) {
+                val g = GatedLoop(ctx, rec)
+                if (g.start(this)) {
+                    gated = g
+                    LogStore.add(ctx, "LISTENING: কম-ব্যাটারি মোড (কণ্ঠ ধরলে তবেই বুঝবে)")
+                    return
+                }
+                LogStore.add(ctx, "কম-ব্যাটারি মোড শুরু হয়নি, সাধারণ শোনায় ফিরলাম")
+            }
             val s = SpeechService(rec, 16000.0f)
             s.startListening(this)
             service = s
@@ -85,6 +102,10 @@ class VoskWakeEngine(
 
     /** Releases the microphone (needed for STT/TTS). Call start() again to resume. */
     override fun pause() {
+        gated?.let {
+            gated = null
+            it.stop()
+        }
         val s = service ?: return
         service = null
         try {
@@ -110,7 +131,7 @@ class VoskWakeEngine(
         // a voice-print only exists for a finished utterance, so with "only my voice" (or while enrolling) wait for it
         if (voice != null && spkModel != null || enrollment != null) return
         val p = field(hypothesis, "partial")
-        if (p.isNotEmpty() && WakePolicy.shouldFire(sensitivity, false, p, null)) fire("partial \"$p\"")
+        if (p.isNotEmpty() && WakePolicy.shouldFire(sensitivity, false, p, null, phrase)) fire("partial \"$p\"")
     }
 
     override fun onResult(hypothesis: String?) {
@@ -118,12 +139,12 @@ class VoskWakeEngine(
         val spk = spkVector(hypothesis)
 
         enrollment?.let { e ->
-            if (t.contains("hey build") && spk != null) handleEnrollSample(e, spk)
-            else if (t.contains("hey build")) LogStore.add(ctx, "কণ্ঠ রেজিস্টার: কণ্ঠের তথ্য পাইনি (খুব ছোট বা আস্তে?), আবার বলুন")
+            if (phrase.matches(t) && spk != null) handleEnrollSample(e, spk)
+            else if (phrase.matches(t)) LogStore.add(ctx, "কণ্ঠ রেজিস্টার: কণ্ঠের তথ্য পাইনি (খুব ছোট বা আস্তে?), আবার বলুন")
             return
         }
 
-        if (t.isNotEmpty() && WakePolicy.shouldFire(sensitivity, true, t, avgConf(hypothesis))) {
+        if (t.isNotEmpty() && WakePolicy.shouldFire(sensitivity, true, t, avgConf(hypothesis), phrase)) {
             val lock = voice
             if (lock != null && spkModel != null) {
                 val d = spk?.let { SpeakerMath.cosineDistance(lock.print, it) }

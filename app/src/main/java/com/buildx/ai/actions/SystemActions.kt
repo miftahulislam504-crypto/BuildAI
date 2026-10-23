@@ -18,7 +18,11 @@ import com.buildx.ai.nlu.IntentParser
 import com.buildx.ai.system.AlarmMath
 import com.buildx.ai.system.AlarmWords
 import com.buildx.ai.system.AppCatalog
+import com.buildx.ai.reminder.DatedAlarmScheduler
 import com.buildx.ai.system.BackgroundLauncher
+import com.buildx.ai.system.DatedAlarm
+import com.buildx.ai.system.DatedAlarmPlan
+import com.buildx.ai.system.Reminders
 import com.buildx.ai.system.Launchable
 import com.buildx.ai.system.MainScheduler
 import com.buildx.ai.system.Verdict
@@ -275,6 +279,9 @@ object AlarmAction : Action {
             now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), hour, minute,
             params["ambiguous"] == "true", params["when"] ?: "auto"
         )
+        // Phase 6: "পরশু ৬টায়" (or "কাল" when the next 6 o'clock is still today) cannot be said to the Clock app, so BuildX rings it itself
+        val dated = DatedAlarm.plan(now, params)
+        if (dated != null && !dated.clockAppFires) return ownAlarm(ac, ctx, dated, now)
         val intent = Intent(AlarmClock.ACTION_SET_ALARM)
             .putExtra(AlarmClock.EXTRA_HOUR, plan.hour)
             .putExtra(AlarmClock.EXTRA_MINUTES, plan.minute)
@@ -318,6 +325,32 @@ object AlarmAction : Action {
                         Verdict.NO -> ActionResult(false, ac.t("অ্যালার্মের অনুরোধ পাঠিয়েছি, কিন্তু সিস্টেমে বসেছে দেখতে পাচ্ছি না। ক্লক অ্যাপে দেখে নিন", "I sent the alarm request but can't see it in the system. Please check the Clock app"))
                     }
                 )
+            }
+        })
+    }
+
+    /** an alarm on an exact date, set with AlarmManager.setAlarmClock and rung by BuildX (it does not appear in the Clock app) */
+    private fun ownAlarm(ac: ActionContext, ctx: Context, dated: DatedAlarmPlan, now: Calendar): ActionResult {
+        val r = DatedAlarmScheduler.add(ctx, dated.at, "BuildX")
+        LogStore.add(ctx, "ALARM(own) at=${dated.at} ${dated.hour}:${dated.minute} ok=${r != null}")
+        if (r == null) {
+            return ActionResult(false, ac.t("অ্যালার্ম দেওয়া যায়নি। অ্যাপের তথ্য থেকে \"অ্যালার্ম ও রিমাইন্ডার\" অনুমতি দিন", "Couldn't set the alarm. Allow \"Alarms & reminders\" in the app's settings"))
+        }
+        val whenSaid = Reminders.sayWhen(dated.at, now, ac.bn)
+        val final = ac.t("$whenSaid অ্যালার্ম দিয়েছি। এটা BuildX নিজে বাজাবে, ক্লক অ্যাপে দেখা যাবে না", "Alarm set for $whenSaid. BuildX rings it itself; it won't show in the Clock app")
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return ActionResult(true, "", deferred = Deferred { report ->
+            Verify.poll(MainScheduler, 300, 4, {
+                val next = am.nextAlarmClock?.triggerTime
+                when {
+                    next == null -> Verdict.NO
+                    Math.abs(next - dated.at) <= 90_000L -> Verdict.YES
+                    next < dated.at -> Verdict.UNKNOWN // an earlier alarm hides ours
+                    else -> Verdict.NO
+                }
+            }) { v ->
+                LogStore.add(ctx, "ALARM(own) verify -> $v")
+                report(if (v == Verdict.NO) ActionResult(false, ac.t("অ্যালার্ম বসিয়েছি, কিন্তু সিস্টেমে দেখতে পাচ্ছি না। আবার চেষ্টা করুন", "I set it but can't see it in the system. Please try again")) else ActionResult(true, final))
             }
         })
     }

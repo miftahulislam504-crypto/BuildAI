@@ -19,7 +19,7 @@ object CallAction : Action {
             contacts = AndroidContacts(ctx),
             placer = AndroidCallPlacer(ctx, ac.bn),
             nicknames = NicknameBook.parse(prefs.getString("nicknames", "") ?: ""),
-            confirm = prefs.getBoolean("confirmCall", true) || params["via"] == "llm", // a call the model chose is always confirmed
+            confirm = RiskPolicy.callNeedsConfirm(prefs.getBoolean("confirmCall", true), params), // a call the model chose is always confirmed
             log = { LogStore.add(ctx, it) }
         )
         return flow.start(params["target"], params["number"])

@@ -5,6 +5,8 @@ import com.buildx.ai.actions.ActionContext
 import com.buildx.ai.actions.ActionRegistry
 import com.buildx.ai.actions.ActionResult
 import com.buildx.ai.actions.ChainRunner
+import com.buildx.ai.actions.FollowUp
+import com.buildx.ai.actions.RiskPolicy
 import com.buildx.ai.llm.AndroidLlm
 import com.buildx.ai.routine.RoutineStore
 import com.buildx.ai.system.ConversationMemory
@@ -66,9 +68,21 @@ object CommandPipeline {
         return ChainRunner(ac.bn, { p -> runOne(ac, p, p.normalized) }, MainScheduler).start(steps)
     }
 
-    private fun runOne(ac: ActionContext, parsed: Parsed, text: String): ActionResult {
+    internal fun runOne(ac: ActionContext, parsed: Parsed, text: String): ActionResult { // internal: the instrumented tests check the risk gate
         val said = Describe.say(parsed, ac.bn)
         val action = ActionRegistry.get(parsed.intent)
+
+        // Phase 6: a step the server chose that changes how the phone connects or rings is only run after a spoken yes
+        if (action != null && RiskPolicy.mustAsk(parsed.intent, parsed.slots)) {
+            LogStore.add(ac.context, "RISK ask first: ${parsed.intent} ${parsed.slots}")
+            return ActionResult(true, if (ac.bn) "$said। করব?" else "$said. Should I go ahead?", FollowUp { reply ->
+                when (Reply.yesNo(reply)) {
+                    Reply.YesNo.YES -> runOne(ac, parsed.copy(slots = parsed.slots + (RiskPolicy.CONFIRMED to "1")), text)
+                    Reply.YesNo.NO -> ActionResult(true, if (ac.bn) "ঠিক আছে, করিনি" else "Okay, not doing it")
+                    Reply.YesNo.UNKNOWN -> ActionResult(false, if (ac.bn) "বুঝতে পারিনি, করিনি" else "Didn't get that, not doing it")
+                }
+            })
+        }
 
         val result = when {
             parsed.intent == "end_call" ->

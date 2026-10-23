@@ -18,11 +18,10 @@ enum class WakeSensitivity(val label: String) {
  */
 object WakePolicy {
 
-    private val phrase = Regex("hey build")
     const val LOW_MIN_CONF = 0.8
 
-    fun shouldFire(level: WakeSensitivity, isFinal: Boolean, text: String, avgConf: Double?): Boolean {
-        if (!phrase.containsMatchIn(text)) return false
+    fun shouldFire(level: WakeSensitivity, isFinal: Boolean, text: String, avgConf: Double?, phrase: WakePhrase = WakePhrase.DEFAULT): Boolean {
+        if (!phrase.matches(text)) return false
         return when (level) {
             WakeSensitivity.HIGH -> true // even while still talking
             WakeSensitivity.NORMAL -> isFinal
