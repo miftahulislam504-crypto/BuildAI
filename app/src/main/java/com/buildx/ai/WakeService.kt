@@ -31,6 +31,7 @@ import com.buildx.ai.wake.VoskWakeEngine
 import com.buildx.ai.wake.WakeEngine
 import com.buildx.ai.wake.SpeakerMath
 import com.buildx.ai.wake.VoiceLockStore
+import com.buildx.ai.wake.WakePhrase
 import com.buildx.ai.wake.WakeSensitivity
 
 /**
@@ -138,10 +139,13 @@ class WakeService : Service() {
             try {
                 val t0 = SystemClock.elapsedRealtime()
                 val spkPath = if (ModelManager.isSpkReady(appCtx)) ModelManager.spkDir(appCtx).absolutePath else null
+                val sp = getSharedPreferences("buildx", MODE_PRIVATE)
                 val eng = VoskWakeEngine(
                     appCtx, path, spkPath,
-                    WakeSensitivity.from(getSharedPreferences("buildx", MODE_PRIVATE).getInt("wakeSens", 1)),
-                    VoiceLockStore.load(appCtx)
+                    WakeSensitivity.from(sp.getInt("wakeSens", 1)),
+                    VoiceLockStore.load(appCtx),
+                    WakePhrase.fromPref(sp.getString("wakePhrase", "")), // Phase 5: the person's own wake phrase
+                    sp.getBoolean("lowPower", false) // Phase 5: off by default, switch in Settings
                 ) { main.post { onWake() } }
                 val ms = SystemClock.elapsedRealtime() - t0
                 main.post {
@@ -345,7 +349,7 @@ class WakeService : Service() {
         )
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("BuildX AI শুনছে")
-            .setContentText("\"Hey BuildX\" বলুন")
+            .setContentText("\"${WakePhrase.fromPref(getSharedPreferences("buildx", MODE_PRIVATE).getString("wakePhrase", "")).let { if (it.isDefault) "Hey BuildX" else it.display }}\" বলুন")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(0, "বন্ধ করুন", stopIntent).build())

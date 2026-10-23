@@ -9,6 +9,9 @@ import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import com.buildx.ai.stt.SttMode
+import com.buildx.ai.stt.Transcript
+import com.buildx.ai.stt.WhisperStt
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,9 +65,37 @@ class SttRunner(private val ctx: Context) {
         finish(null)
     }
 
+    private var whisper: WhisperStt? = null
+
     fun start(lang: String, onDone: (String?) -> Unit) {
         this.onDone = onDone
 
+        // Phase 5: Whisper first when the person chose it (and the proxy is set); any failure falls back to the phone's recognizer
+        val prefs = ctx.applicationContext.getSharedPreferences("buildx", Context.MODE_PRIVATE)
+        val mode = SttMode.from(prefs.getString("sttMode", "system"))
+        val cfg = WhisperStt.configFrom(ctx)
+        if (cfg != null && SttMode.useWhisper(mode, lang, true)) {
+            val w = WhisperStt(ctx, cfg)
+            whisper = w
+            main.postDelayed(watchdog, 30000)
+            w.start(lang) { t ->
+                whisper = null
+                main.removeCallbacks(watchdog)
+                when (t) {
+                    is Transcript.Text -> finish(t.text)
+                    is Transcript.Silence -> finish(null)
+                    is Transcript.Failed -> {
+                        LogStore.add(ctx, "STT[whisper] ব্যর্থ (${t.why}), ফোনের রিকগনাইজারে ফিরলাম")
+                        if (!done) startSystem(lang)
+                    }
+                }
+            }
+            return
+        }
+        startSystem(lang)
+    }
+
+    private fun startSystem(lang: String) {
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             LogStore.add(ctx, "STT: রিকগনিশন সার্ভিস পাওয়া যায়নি")
             finish(null)
@@ -117,6 +148,8 @@ class SttRunner(private val ctx: Context) {
         if (done) return
         done = true
         main.removeCallbacks(watchdog)
+        whisper?.cancel() // a timeout must also free the microphone
+        whisper = null
         try {
             recognizer?.destroy()
         } catch (_: Exception) {
@@ -129,6 +162,8 @@ class SttRunner(private val ctx: Context) {
     fun cancel() {
         done = true
         main.removeCallbacks(watchdog)
+        whisper?.cancel()
+        whisper = null
         try {
             recognizer?.cancel()
             recognizer?.destroy()

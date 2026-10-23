@@ -14,9 +14,16 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.content.res.ColorStateList
 import android.text.InputType
+import android.view.Gravity
+import android.view.View
+import android.view.WindowInsets
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
-import android.widget.CheckBox
+import android.widget.CompoundButton
+import android.widget.FrameLayout
+import android.widget.SeekBar
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -43,7 +50,12 @@ import com.buildx.ai.llm.AndroidLlm
 import com.buildx.ai.wake.ModelManager
 import com.buildx.ai.wake.VoiceLockStore
 import com.buildx.ai.wake.VoiceStrictness
+import com.buildx.ai.wake.WakePhrase
 import com.buildx.ai.wake.WakeSensitivity
+import com.buildx.ai.stt.SttEndpoint
+import com.buildx.ai.stt.SttMode
+import com.buildx.ai.stt.WhisperStt
+import com.buildx.ai.ui.Ui
 import com.buildx.ai.call.SimHelper
 import com.buildx.ai.system.BackgroundLauncher
 import com.buildx.ai.contacts.AndroidContacts
@@ -67,31 +79,48 @@ class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var cmdInput: EditText
     private lateinit var modelStatus: TextView
-    private lateinit var permStatus: TextView
     private lateinit var logView: TextView
     private lateinit var langGroup: RadioGroup
-    private lateinit var wakeLockBox: CheckBox
-    private lateinit var confirmBox: CheckBox
-    private lateinit var llmBox: CheckBox
+    private lateinit var wakeLockBox: CompoundButton
+    private lateinit var confirmBox: CompoundButton
+    private lateinit var llmBox: CompoundButton
     private lateinit var llmUrlInput: EditText
     private lateinit var llmTokenInput: EditText
     private lateinit var llmStatus: TextView
-    private lateinit var agentBox: CheckBox
-    private lateinit var autoToggleBox: CheckBox
+    private lateinit var agentBox: CompoundButton
+    private lateinit var autoToggleBox: CompoundButton
     private lateinit var a11yStatus: TextView
     private lateinit var assistStatus: TextView
     private lateinit var adminStatus: TextView
-    private lateinit var popupBox: CheckBox
-    private lateinit var autoStartBox: CheckBox
+    private lateinit var popupBox: CompoundButton
+    private lateinit var autoStartBox: CompoundButton
     private lateinit var stabilityStatus: TextView
     private lateinit var voiceStatus: TextView
-    private lateinit var voiceBox: CheckBox
+    private lateinit var voiceBox: CompoundButton
     private lateinit var strictGroup: RadioGroup
-    private lateinit var vibrateBox: CheckBox
+    private lateinit var vibrateBox: CompoundButton
     private lateinit var sensGroup: RadioGroup
     private lateinit var nickInput: EditText
     private lateinit var simGroup: RadioGroup
     private lateinit var simStatus: TextView
+    private lateinit var ui: Ui
+    private lateinit var tabBar: Ui.TabBar
+    private lateinit var headerTitle: TextView
+    private val pages = ArrayList<View>()
+    private var currentTab = 0
+    private val statusRows = ArrayList<Ui.StatusRow>()
+    private lateinit var homePill: TextView
+    private lateinit var homeToggle: Button
+    private lateinit var homeHint: TextView
+    private lateinit var homeReady: TextView
+    private lateinit var homeLog: TextView
+    private lateinit var phraseInput: EditText
+    private lateinit var phraseStatus: TextView
+    private lateinit var lowPowerBox: CompoundButton
+    private lateinit var sttGroup: RadioGroup
+    private lateinit var sttNote: TextView
+    private lateinit var ttsInfo: TextView
+    private lateinit var testInput: EditText
     private var pendingFollowUp: FollowUp? = null
 
     private var pendingAction: (() -> Unit)? = null
@@ -103,284 +132,493 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("buildx", MODE_PRIVATE)
+        ui = Ui(this)
+        currentTab = savedInstanceState?.getInt("tab") ?: 0
+
+        // every control the old single page had still exists (the logic below uses them); they are now grouped into four tabs
+        pages.add(buildHome())
+        pages.add(buildSetup())
+        pages.add(buildSettings())
+        pages.add(buildTools())
+
+        val frame = FrameLayout(this)
+        for (pg in pages) frame.addView(pg, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        headerTitle = ui.label("BuildX AI", 22f, bold = true).apply { setPadding(ui.dp(20), ui.dp(14), ui.dp(20), ui.dp(6)) }
+        tabBar = Ui.TabBar(ui, listOf("🏠" to "হোম", "🛠" to "সেটআপ", "⚙" to "সেটিংস", "🧪" to "পরীক্ষা")) { showTab(it) }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setBackgroundColor(ui.c(R.color.bx_bg))
+            addView(headerTitle)
+            addView(frame, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(View(this@MainActivity).apply { setBackgroundColor(ui.c(R.color.bx_outline)) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+            addView(tabBar.view)
         }
+        // the system bars are drawn over the app on new phones; keep the content clear of them
+        root.setOnApplyWindowInsetsListener { v, ins ->
+            val top: Int
+            val bottom: Int
+            if (Build.VERSION.SDK_INT >= 30) {
+                val i = ins.getInsets(WindowInsets.Type.systemBars())
+                top = i.top; bottom = i.bottom
+            } else {
+                @Suppress("DEPRECATION") run { top = ins.systemWindowInsetTop; bottom = ins.systemWindowInsetBottom }
+            }
+            v.setPadding(0, top, 0, bottom)
+            ins
+        }
+        setContentView(root)
+        showTab(currentTab)
+    }
 
-        root.addView(TextView(this).apply {
-            text = "BuildX AI — ধাপ ১০"
-            textSize = 20f
-            setTypeface(typeface, Typeface.BOLD)
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("tab", currentTab)
+    }
+
+    private fun showTab(i: Int) {
+        currentTab = i.coerceIn(0, pages.size - 1)
+        for ((k, pg) in pages.withIndex()) pg.visibility = if (k == currentTab) View.VISIBLE else View.GONE
+        tabBar.select(currentTab)
+        headerTitle.text = listOf("BuildX AI", "সেটআপ", "সেটিংস", "পরীক্ষা ও লগ")[currentTab]
+        if (currentTab == 3) logView.text = LogStore.read(this)
+    }
+
+    // ---------- tab 1: home ----------
+
+    private fun buildHome(): View {
+        val (sv, col) = ui.page()
+
+        val hero = ui.card()
+        homePill = ui.pill("বন্ধ", Ui.Kind.WARN)
+        hero.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(ui.label("শোনার অবস্থা", 16f, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(homePill)
         })
+        homeHint = ui.hint("").apply { setPadding(0, ui.dp(4), 0, ui.dp(8)) }
+        hero.addView(homeHint)
+        homeToggle = ui.primary("▶  শোনা শুরু করুন") { toggleListening() }
+        hero.addView(homeToggle)
+        hero.addView(ui.pair(ui.tonal("🎤  কথা বলুন") { talkNow() }, ui.quiet("🔊  কণ্ঠ শুনুন") { testTts() }))
+        col.addView(hero)
 
-        permStatus = TextView(this)
-        root.addView(permStatus)
-        root.addView(button("ব্যাটারি অপ্টিমাইজেশন থেকে ছাড় দিন") { requestBatteryExemption() })
-        root.addView(button("\"অন্য অ্যাপের উপর দেখানো\" পারমিশন (ব্যাকগ্রাউন্ড থেকে অ্যাপ/সেটিংস খোলার জন্য)") { requestOverlay() })
+        val cmd = ui.card("লিখে কমান্ড দিন", "যেমন: এখন কয়টা বাজে, রহিমকে কল করো")
+        cmdInput = ui.input("কমান্ড লিখুন…").apply {
+            imeOptions = EditorInfo.IME_ACTION_SEND
+            setOnEditorActionListener { _, _, _ -> runTextCommand(); true }
+            setSingleLine(true)
+        }
+        cmd.addView(cmdInput)
+        cmd.addView(ui.primary("চালাও") { runTextCommand() })
+        col.addView(cmd)
 
-        modelStatus = TextView(this)
-        root.addView(modelStatus)
-        root.addView(button("wake word মডেল নামান (~৪০ MB, একবারই)") { downloadModel() })
+        val ready = ui.card("প্রস্তুতি")
+        homeReady = ui.statusText()
+        ready.addView(homeReady)
+        ready.addView(ui.tonal("সেটআপে যান") { showTab(1) })
+        col.addView(ready)
 
+        val rec = ui.card("সাম্প্রতিক")
+        homeLog = TextView(this).apply {
+            typeface = Typeface.MONOSPACE
+            textSize = 11.5f
+            setTextColor(ui.c(R.color.bx_log_text))
+            background = ui.rounded(ui.c(R.color.bx_log_bg), 12)
+            setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
+        }
+        rec.addView(homeLog)
+        rec.addView(ui.quiet("পুরো লগ দেখুন") { showTab(3) })
+        col.addView(rec)
+        return sv
+    }
+
+    private fun toggleListening() {
+        if (WakeService.running) {
+            startService(Intent(this, WakeService::class.java).setAction(WakeService.ACTION_STOP))
+        } else {
+            startListening()
+        }
+        // the service starts and stops a moment later, so look again then
+        window.decorView.postDelayed({ if (!isDestroyed) refreshHome() }, 900)
+    }
+
+    private fun refreshHome() {
+        val on = WakeService.running
+        ui.setPill(homePill, if (on) "শুনছে" else "বন্ধ", if (on) Ui.Kind.OK else Ui.Kind.WARN)
+        homeToggle.text = if (on) "■  শোনা বন্ধ করুন" else "▶  শোনা শুরু করুন"
+        val phrase = WakePhrase.fromPref(prefs.getString("wakePhrase", ""))
+        homeHint.text = if (on) "\"${phrase.display}\" বলে ডাকুন" else "চালু করলে \"${phrase.display}\" বলে ডাকা যাবে"
+        val missing = statusRows.filter { it.isRequired && !it.ok }.map { it.label }
+        homeReady.text = if (missing.isEmpty()) "✓ জরুরি সবকিছু প্রস্তুত" else "বাকি আছে: ${missing.joinToString(", ")}"
+    }
+
+    private fun lastLines(all: String): String =
+        all.takeLast(3000).trimEnd().lines().takeLast(8).joinToString("\n").ifBlank { "এখনো কিছু হয়নি" }
+
+    // ---------- tab 2: setup (permissions and system switches) ----------
+
+    private fun addRow(card: LinearLayout, name: String, required: Boolean, fix: (() -> Unit)?, check: () -> Boolean) {
+        val row = ui.StatusRow(name, check, fix, required)
+        statusRows.add(row)
+        card.addView(row.view)
+    }
+
+    private fun buildSetup(): View {
+        val (sv, col) = ui.page()
+        fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
+
+        val must = ui.card("জরুরি", "এগুলো ছাড়া \"হে বিল্ড\" শোনা চলবে না")
+        addRow(must, "মাইক", true, { ensurePerms { refreshPermStatus() } }) { has(Manifest.permission.RECORD_AUDIO) }
+        addRow(must, "নোটিফিকেশন", true, { ensurePerms { refreshPermStatus() } }) {
+            Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        addRow(must, "ব্যাটারি অপ্টিমাইজেশন থেকে ছাড়", true, { requestBatteryExemption() }) {
+            (getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
+        }
+        addRow(must, "ওয়েক ওয়ার্ড মডেল (~৪০ MB, একবারই)", true, { downloadModel() }) { ModelManager.isReady(this) }
+        modelStatus = ui.statusText()
+        must.addView(modelStatus)
+        col.addView(must)
+
+        val people = ui.card("কল, মেসেজ ও কন্টাক্ট", "যে কাজ করাতে চান, শুধু তার অনুমতিই দিন")
+        for ((name, perm) in listOf(
+            "ফোন করা" to Manifest.permission.CALL_PHONE,
+            "কন্টাক্ট পড়া" to Manifest.permission.READ_CONTACTS,
+            "ফোনের অবস্থা (SIM)" to Manifest.permission.READ_PHONE_STATE,
+            "ক্যামেরা (টর্চ)" to Manifest.permission.CAMERA,
+            "এসএমএস পাঠানো" to Manifest.permission.SEND_SMS,
+            "এসএমএস পড়া" to Manifest.permission.READ_SMS
+        )) addRow(people, name, false, { requestCallPerms() }) { has(perm) }
+        col.addView(people)
+
+        val special = ui.card("বিশেষ অনুমতি", "এগুলো সেটিংসে গিয়ে নিজে চালু করতে হয়")
+        addRow(special, "অন্য অ্যাপের উপর দেখানো", false, { requestOverlay() }) { BackgroundLauncher.canOverlay(this) }
+        addRow(special, "সিস্টেম সেটিংস বদল (ব্রাইটনেস)", false, { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) }) { Settings.System.canWrite(this) }
+        addRow(special, "সাইলেন্ট/DND নিয়ন্ত্রণ", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) }) {
+            (getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
+        }
+        addRow(special, "নোটিফিকেশন পড়া (\"কে কল করছে\")", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) {
+            BuildXNotificationListener.isEnabledInSettings(this)
+        }
+        col.addView(special)
+
+        val a11y = ui.card("Accessibility", "স্ক্রিন লক, ওয়াইফাই/ব্লুটুথ টগল, ট্যাপ ও টাইপ করার জন্য")
+        a11yStatus = ui.statusText()
+        a11y.addView(a11yStatus)
+        a11y.addView(ui.primary("Accessibility সেটিংস খুলুন") { openAccessibilitySettings() })
+        a11y.addView(ui.pair(ui.quiet("অ্যাপ তথ্য") { openAppInfo() }, ui.quiet("জোর করে চালু") { forceEnableA11y() }))
+        a11y.addView(ui.expandable("চালু করার ধাপ",
+            "১. \"Accessibility সেটিংস খুলুন\" → \"ইনস্টল করা অ্যাপ\" (বা \"ডাউনলোড করা অ্যাপ\") → BuildX AI → চালু করুন।\n\n" +
+                "২. \"Restricted setting\" বলে আটকালে: \"OK\" চেপে বেরিয়ে আসুন → \"অ্যাপ তথ্য\" চাপুন → উপরে ডানের ⋮ → \"Allow restricted settings\" → PIN/ফিঙ্গারপ্রিন্ট দিন → আবার ধাপ ১। (এই অপশন আটকানোর বার্তা একবার দেখার পরেই আসে)\n\n" +
+                "৩. তাতেও না হলে নিচের \"স্ক্রিন লক\" কার্ড দিয়ে অন্তত স্ক্রিন লক চালানো যাবে।\n\n" +
+                "এটা চালু না করলে শুধু স্ক্রিন লক আর ওয়াইফাই/ব্লুটুথ নিজে টগল করা কাজ করবে না, বাকি সব কাজ করবে।"))
+        val (autoRow, autoSw) = ui.switchRow("ওয়াইফাই/ব্লুটুথ নিজে টগল করা", "Accessibility লাগে", prefs.getBoolean("autoToggle", true))
+        autoToggleBox = autoSw
+        a11y.addView(autoRow)
+        col.addView(a11y)
+
+        val assist = ui.card("ডিজিটাল অ্যাসিস্ট্যান্ট", "পপআপ, আর সিস্টেম নিজে অ্যাপকে চালু রাখে")
+        assistStatus = ui.statusText()
+        assist.addView(assistStatus)
+        assist.addView(ui.primary("ডিফল্ট অ্যাসিস্ট্যান্ট সেটিংস খুলুন") { openAssistantSettings() })
+        assist.addView(ui.expandable("এতে কী হয়?",
+            "সেখানে BuildX AI বেছে নিন। তারপর: (১) সাইড-কী/হোম-জেসচার চেপে ধরলে সরাসরি শোনা শুরু ও পপআপ আসবে, (২) ওয়েক ওয়ার্ড বললে লক স্ক্রিনের উপরেও পপআপ আসবে, (৩) সিস্টেম এই অ্যাপকে ফোন চালু হতেই সচল রাখবে।\n\n" +
+                "মনে রাখুন: অ্যাসিস্ট্যান্ট হলেও ফোন আনলক করা যায় না (সেটা শুধু আপনার PIN/ফিঙ্গারপ্রিন্ট), আর ওয়েক ওয়ার্ড শোনার ইঞ্জিন সিস্টেম দেয় না, সেটা BuildX-এর নিজের সার্ভিসই করে।"))
+        val (popRow, popSw) = ui.switchRow("ওয়েক ওয়ার্ডে পপআপ দেখাও", null, prefs.getBoolean("assistPopup", true))
+        popupBox = popSw
+        assist.addView(popRow)
+        val (autoStartRow, autoStartSw) = ui.switchRow("অ্যাসিস্ট্যান্ট চালু হলে নিজে শোনা শুরু করা", null, prefs.getBoolean("assistAutoStart", true))
+        autoStartBox = autoStartSw
+        assist.addView(autoStartRow)
+        assist.addView(ui.quiet("পপআপ পরীক্ষা করো") { testPopup() })
+        col.addView(assist)
+
+        val admin = ui.card("স্ক্রিন লক (Accessibility ছাড়া বিকল্প)")
+        adminStatus = ui.statusText()
+        admin.addView(adminStatus)
+        admin.addView(ui.pair(ui.tonal("চালু করুন") { enableDeviceAdmin() }, ui.quiet("বন্ধ করুন") { disableDeviceAdmin() }))
+        col.addView(admin)
+
+        val stab = ui.card("ফোন ও স্থায়িত্ব", "ফোন যেন সার্ভিসকে মেরে না ফেলে")
+        stabilityStatus = ui.statusText()
+        stab.addView(stabilityStatus)
+        stab.addView(ui.tonal("এই ফোনে চালু রাখার গাইড (ব্যাটারি/Autostart)") { showOemGuide() })
+        col.addView(stab)
+        return sv
+    }
+
+    // ---------- tab 3: settings ----------
+
+    private fun saveOn(sw: CompoundButton) = sw.setOnCheckedChangeListener { _, _ -> saveSettings() }
+
+    private fun buildSettings(): View {
+        val (sv, col) = ui.page()
+
+        val lang = ui.card("ভাষা", "কমান্ড ও উত্তরের ভাষা")
         langGroup = RadioGroup(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(RadioButton(this@MainActivity).apply {
-                text = "বাংলা (bn-BD)"
-                id = idBangla
-            })
-            addView(RadioButton(this@MainActivity).apply {
-                text = "English (en-US)"
-                id = idEnglish
-            })
+            addView(ui.radio("বাংলা", idBangla).apply { layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f) })
+            addView(ui.radio("English", idEnglish).apply { layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f) })
             check(if (prefs.getString("lang", "bn-BD") == "en-US") idEnglish else idBangla)
+            setOnCheckedChangeListener { _, _ -> saveSettings() }
         }
-        root.addView(langGroup)
+        lang.addView(langGroup)
+        col.addView(lang)
 
-        wakeLockBox = CheckBox(this).apply {
-            text = "WakeLock ব্যবহার করো (স্ক্রিন অফে শোনার জন্য)"
-            isChecked = prefs.getBoolean("wakeLock", true)
+        // --- wake word ---
+        val wake = ui.card("ওয়েক ওয়ার্ড", "যে কথা বলে ডাকবেন। শোনা বন্ধ করে আবার চালু করলে নতুন সেটিং কাজ করে")
+        phraseInput = ui.input("ডিফল্ট: hey build", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, prefs.getString("wakePhrase", "") ?: "")
+        wake.addView(phraseInput)
+        phraseStatus = ui.statusText().apply { text = "২–৪টা ইংরেজি শব্দ, যেমন যেভাবে শোনায়: hey jarvis, ok buddy" }
+        wake.addView(phraseStatus)
+        wake.addView(ui.tonal("যাচাই করে সেভ করুন") { savePhrase() })
+        wake.addView(ui.divider())
+        wake.addView(ui.label("কত সহজে ধরবে", 14f, bold = true))
+        sensGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
+        for (lv in WakeSensitivity.values()) sensGroup.addView(ui.radio(lv.label, 3000 + lv.ordinal))
+        sensGroup.check(3000 + prefs.getInt("wakeSens", 1).coerceIn(0, 2))
+        sensGroup.setOnCheckedChangeListener { _, checked -> prefs.edit().putInt("wakeSens", checked - 3000).apply() }
+        wake.addView(sensGroup)
+        wake.addView(ui.divider())
+        val (wlRow, wlSw) = ui.switchRow("স্ক্রিন অফেও শোনা", "WakeLock ধরে রাখে", prefs.getBoolean("wakeLock", true))
+        wakeLockBox = wlSw; saveOn(wlSw)
+        wake.addView(wlRow)
+        val (lpRow, lpSw) = ui.switchRow("কম-ব্যাটারি শোনা (পরীক্ষামূলক)", "কণ্ঠ ধরলে তবেই চেনার কাজ চলে, বাকি সময় ঘুমায়। ওয়েক ওয়ার্ড কম ধরলে বন্ধ রাখুন", prefs.getBoolean("lowPower", false))
+        lowPowerBox = lpSw
+        lpSw.setOnCheckedChangeListener { _, on ->
+            prefs.edit().putBoolean("lowPower", on).apply()
+            LogStore.add(this, "কম-ব্যাটারি শোনা: ${if (on) "চালু" else "বন্ধ"} (শোনা আবার চালু করলে কার্যকর)")
         }
-        root.addView(wakeLockBox)
+        wake.addView(lpRow)
+        val (vbRow, vbSw) = ui.switchRow("ডাকলে ভাইব্রেট করা", null, prefs.getBoolean("wakeVibrate", false))
+        vibrateBox = vbSw
+        vbSw.setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("wakeVibrate", on).apply() }
+        wake.addView(vbRow)
+        col.addView(wake)
 
-        root.addView(TextView(this).apply {
-            text = "Accessibility (স্ক্রিন লক, ওয়াইফাই/ব্লুটুথ টগল)"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        a11yStatus = TextView(this)
-        root.addView(a11yStatus)
-        root.addView(button("Accessibility সেটিংস খুলুন") { openAccessibilitySettings() })
-        root.addView(button("অ্যাপ তথ্য খুলুন (\"Allow restricted settings\" দেওয়ার জন্য)") { openAppInfo() })
-        root.addView(button("Accessibility জোর করে চালু করুন (একবার কম্পিউটার থেকে ADB কমান্ড লাগে)") { forceEnableA11y() })
-        root.addView(TextView(this).apply {
-            text = "চালু করার ধাপ:\n" +
-                "১. \"Accessibility সেটিংস খুলুন\" → \"ইনস্টল করা অ্যাপ\" (বা \"ডাউনলোড করা অ্যাপ\") → BuildX AI → চালু করুন।\n" +
-                "২. \"Restricted setting\" বলে আটকালে: \"OK\" চেপে বেরিয়ে আসুন → \"অ্যাপ তথ্য খুলুন\" চাপুন (বা Settings → Apps → BuildX AI) → উপরে ডানের ⋮ (More options) → \"Allow restricted settings\" → PIN/ফিঙ্গারপ্রিন্ট দিন → আবার ধাপ ১। (এই অপশন আটকানোর বার্তা একবার দেখার পরেই আসে)।\n" +
-                "   তাতেও না হলে নিচের \"Device admin\" দিয়ে অন্তত স্ক্রিন লক চালানো যাবে।\n" +
-                "৩. এটা চালু না করলে শুধু স্ক্রিন লক আর ওয়াইফাই/ব্লুটুথ নিজে টগল করা কাজ করবে না, বাকি সব কাজ করবে।"
-            textSize = 13f
-        })
-        autoToggleBox = CheckBox(this).apply {
-            text = "ওয়াইফাই/ব্লুটুথ নিজে টগল করার চেষ্টা করো (Accessibility লাগে)"
-            isChecked = prefs.getBoolean("autoToggle", true)
+        // --- how it hears you (STT) ---
+        val stt = ui.card("আপনার কথা বোঝা", "কমান্ড কোন ইঞ্জিন দিয়ে লেখা হবে")
+        sttGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
+        for (m in SttMode.values()) sttGroup.addView(ui.radio(m.label, 5000 + m.ordinal))
+        sttGroup.check(5000 + SttMode.from(prefs.getString("sttMode", "system")).ordinal)
+        sttNote = ui.statusText()
+        sttGroup.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putString("sttMode", SttMode.values()[(checked - 5000).coerceIn(0, SttMode.values().size - 1)].key).apply()
+            refreshSttNote()
         }
-        root.addView(autoToggleBox)
+        stt.addView(sttGroup)
+        stt.addView(sttNote)
+        stt.addView(ui.hint("Whisper বেছে নিলে আপনার বলা কমান্ডের অডিও আপনার নিজের প্রক্সি সার্ভারে যায় (শুধু https)। ব্যর্থ হলে ফোনের নিজস্ব ইঞ্জিনে ফিরে যায়। ঠিকানা ও টোকেন নিচের \"স্মার্ট সহকারী\" কার্ডে দিন।"))
+        col.addView(stt)
 
-        root.addView(TextView(this).apply {
-            text = "ডিজিটাল অ্যাসিস্ট্যান্ট (পপআপ, সিস্টেম নিজে চালু রাখে)"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
+        // --- how it talks (TTS) ---
+        val tts = ui.card("উত্তর বলার কণ্ঠ", "ভয়েস, গতি ও পিচ")
+        ttsInfo = ui.statusText()
+        tts.addView(ttsInfo)
+        tts.addView(ui.tonal("ভয়েস বাছুন") { pickVoice() })
+        val rateLabel = ui.label("গতি: ${prefs.getInt("ttsRate", 100)}%", 13f)
+        tts.addView(rateLabel)
+        tts.addView(seek(0, 90, prefs.getInt("ttsRate", 100).coerceIn(60, 150) - 60, { rateLabel.text = "গতি: ${it + 60}%" }) {
+            prefs.edit().putInt("ttsRate", it + 60).apply(); speaker?.reapplyTuning()
         })
-        assistStatus = TextView(this)
-        root.addView(assistStatus)
-        root.addView(button("\"ডিফল্ট ডিজিটাল অ্যাসিস্ট্যান্ট\" সেটিংস খুলুন") { openAssistantSettings() })
-        root.addView(TextView(this).apply {
-            text = "সেখানে BuildX AI বেছে নিন। তারপর: (১) সাইড-কী/হোম-জেসচার চেপে ধরলে সরাসরি শোনা শুরু ও পপআপ আসবে, (২) \"Hey BuildX\" বললে লক স্ক্রিনের উপরেও পপআপ আসবে, (৩) সিস্টেম এই অ্যাপকে ফোন চালু হতেই সচল রাখে।\n" +
-                "মনে রাখুন: অ্যাসিস্ট্যান্ট হলেও ফোন আনলক করা যায় না (সেটা শুধু আপনার PIN/ফিঙ্গারপ্রিন্ট), আর \"Hey\" শোনার ইঞ্জিন সিস্টেম দেয় না, সেটা BuildX-এর নিজের সার্ভিসই করে।"
-            textSize = 13f
+        val pitchLabel = ui.label("পিচ: ${prefs.getInt("ttsPitch", 100)}%", 13f)
+        tts.addView(pitchLabel)
+        tts.addView(seek(0, 60, prefs.getInt("ttsPitch", 100).coerceIn(70, 130) - 70, { pitchLabel.text = "পিচ: ${it + 70}%" }) {
+            prefs.edit().putInt("ttsPitch", it + 70).apply(); speaker?.reapplyTuning()
         })
-        popupBox = CheckBox(this).apply {
-            text = "\"Hey BuildX\" বললে পপআপ দেখাও"
-            isChecked = prefs.getBoolean("assistPopup", true)
-        }
-        root.addView(popupBox)
-        autoStartBox = CheckBox(this).apply {
-            text = "অ্যাসিস্ট্যান্ট চালু হলে নিজে থেকে শোনা শুরু করার চেষ্টা করো"
-            isChecked = prefs.getBoolean("assistAutoStart", true)
-        }
-        root.addView(autoStartBox)
-        root.addView(button("পপআপ পরীক্ষা করো") { testPopup() })
+        tts.addView(ui.pair(ui.primary("🔊  শুনুন") { testTts() }, ui.quiet("ইঞ্জিন সেটিংস") { openTtsSettings() }))
+        col.addView(tts)
 
-        root.addView(TextView(this).apply {
-            text = "স্ক্রিন লক (Accessibility ছাড়া বিকল্প)"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        adminStatus = TextView(this)
-        root.addView(adminStatus)
-        root.addView(button("Device admin চালু করুন (শুধু স্ক্রিন লক করার জন্য)") { enableDeviceAdmin() })
-        root.addView(button("Device admin বন্ধ করুন") { disableDeviceAdmin() })
-
-        root.addView(TextView(this).apply {
-            text = "আমার কণ্ঠ (শুধু আমার কণ্ঠে সাড়া)"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        voiceStatus = TextView(this)
-        root.addView(voiceStatus)
-        root.addView(TextView(this).apply {
-            text = "ধাপ: (১) কণ্ঠ-মডেল নামান (একবার, ~১৩ MB, ইন্টারনেট লাগে)। (২) শোনা চালু করে সার্ভিস সচল রাখুন। (৩) \"রেজিস্টার\" চেপে শান্ত জায়গায় ৫ বার \"Hey Build\" বলুন, প্রতিবার একটু থেমে। (৪) নিচের টিকবক্স চালু করুন।\n" +
-                "মনে রাখুন: কণ্ঠ শুধু \"Hey Build\" বলার সময় মেলানো হয়। তাই অন্য কেউ ডাকলে সাড়া দেবে না, কিন্তু আপনি ডাকার পর অন্য কেউ কমান্ড বললে সেটা আটকাবে না। ছোট বাক্যে মেলানো নিখুঁত না, তাই ভুল হলে নিচের কড়া/ঢিলা বদলান, লগে \"WAKE-VOICE দূরত্ব\" লাইন দেখে ঠিক করুন।"
-            textSize = 13f
-        })
-        root.addView(button("কণ্ঠ-মডেল নামান (~১৩ MB)") { downloadSpeakerModel() })
-        root.addView(button("আমার কণ্ঠ রেজিস্টার করুন (৫ বার \"Hey Build\")") { enrollVoice() })
-        voiceBox = CheckBox(this).apply {
-            text = "শুধু আমার কণ্ঠে সাড়া দাও"
-            isChecked = prefs.getBoolean("voiceLock", false)
-            setOnCheckedChangeListener { _, on ->
-                prefs.edit().putBoolean("voiceLock", on).apply()
-                WakeService.instance?.reloadVoiceLock()
-                refreshVoice()
-            }
+        // --- voice lock ---
+        val vl = ui.card("আমার কণ্ঠ", "শুধু আমার ডাকে সাড়া দেবে")
+        voiceStatus = ui.statusText()
+        vl.addView(voiceStatus)
+        vl.addView(ui.expandable("কীভাবে চালু করবেন?",
+            "(১) কণ্ঠ-মডেল নামান (একবার, ~১৩ MB, ইন্টারনেট লাগে)। (২) শোনা চালু করে সার্ভিস সচল রাখুন। (৩) \"রেজিস্টার\" চেপে শান্ত জায়গায় ৫ বার ওয়েক ওয়ার্ড বলুন, প্রতিবার একটু থেমে। (৪) নিচের সুইচ চালু করুন।\n\n" +
+                "কণ্ঠ শুধু ওয়েক ওয়ার্ড বলার সময় মেলানো হয়। তাই অন্য কেউ ডাকলে সাড়া দেবে না, কিন্তু আপনি ডাকার পর অন্য কেউ কমান্ড বললে আটকাবে না। ওয়েক ওয়ার্ড বদলালে আবার রেজিস্টার করুন। ভুল হলে নিচের কড়া/ঢিলা বদলান, লগে \"WAKE-VOICE দূরত্ব\" লাইন দেখুন।"))
+        vl.addView(ui.pair(ui.quiet("মডেল নামান") { downloadSpeakerModel() }, ui.tonal("রেজিস্টার") { enrollVoice() }))
+        val (vRow, vSw) = ui.switchRow("শুধু আমার কণ্ঠে সাড়া দাও", null, prefs.getBoolean("voiceLock", false))
+        voiceBox = vSw
+        vSw.setOnCheckedChangeListener { _, on ->
+            prefs.edit().putBoolean("voiceLock", on).apply()
+            WakeService.instance?.reloadVoiceLock()
+            refreshVoice()
         }
-        root.addView(voiceBox)
+        vl.addView(vRow)
         strictGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
-        for (lv in VoiceStrictness.values()) strictGroup.addView(RadioButton(this).apply { text = lv.label; id = 4000 + lv.ordinal })
+        for (lv in VoiceStrictness.values()) strictGroup.addView(ui.radio(lv.label, 4000 + lv.ordinal))
         strictGroup.check(4000 + prefs.getInt("voiceStrict", 1).coerceIn(0, 2))
         strictGroup.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putInt("voiceStrict", checked - 4000).apply()
             WakeService.instance?.reloadVoiceLock()
         }
-        root.addView(strictGroup)
-        root.addView(button("আমার কণ্ঠ মুছুন") {
+        vl.addView(strictGroup)
+        vl.addView(ui.quiet("আমার কণ্ঠ মুছুন") {
             VoiceLockStore.clear(this)
             voiceBox.isChecked = false
             WakeService.instance?.reloadVoiceLock()
             refreshVoice()
         })
-        vibrateBox = CheckBox(this).apply {
-            text = "\"Hey Build\" বললে ভাইব্রেট করো"
-            isChecked = prefs.getBoolean("wakeVibrate", false)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("wakeVibrate", on).apply() }
-        }
-        root.addView(vibrateBox)
-        root.addView(button("ব্রাইটনেসের অনুমতি (সিস্টেম সেটিংস বদলানো)") { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) })
-        root.addView(button("সাইলেন্ট/ভাইব্রেট মোডের অনুমতি (Do Not Disturb)") { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) })
-        root.addView(button("নোটিফিকেশন পড়ার অনুমতি (\"নোটিফিকেশন পড়ো\", \"কে কল করছে\")") { openSpecialPermission(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) })
+        col.addView(vl)
 
-        root.addView(TextView(this).apply {
-            text = "ফোন ও স্থায়িত্ব"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        stabilityStatus = TextView(this)
-        root.addView(stabilityStatus)
-        root.addView(TextView(this).apply { text = "\"Hey BuildX\" কত সহজে ধরবে (সার্ভিস আবার চালু করলে কার্যকর):" })
-        sensGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
-        for (lv in WakeSensitivity.values()) {
-            sensGroup.addView(RadioButton(this).apply { text = lv.label; id = 3000 + lv.ordinal })
-        }
-        sensGroup.check(3000 + prefs.getInt("wakeSens", 1).coerceIn(0, 2))
-        sensGroup.setOnCheckedChangeListener { _, checked -> prefs.edit().putInt("wakeSens", checked - 3000).apply() }
-        root.addView(sensGroup)
-        root.addView(button("এই ফোনে চালু রাখার গাইড (ব্যাটারি/Autostart)") { showOemGuide() })
-        root.addView(button("চেকলিস্ট (প্রতি ফোনে ফেজ ০–৭)") { startActivity(Intent(this, ChecklistActivity::class.java)) })
-        root.addView(button("ডিভাইস রিপোর্ট কপি করো") { copyDeviceReport() })
-        root.addView(button("ক্র্যাশ লগ কপি করো") { copyCrashLog() })
-        root.addView(button("ক্র্যাশ লগ মুছুন") { CrashLog.clear(this); refreshStability() })
-
-        root.addView(TextView(this).apply {
-            text = "কল ও কন্টাক্ট"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        root.addView(button("কল/কন্টাক্ট/ক্যামেরা/ফোন-অবস্থার পারমিশন দিন") { requestCallPerms() })
-        confirmBox = CheckBox(this).apply {
-            text = "কল করার আগে জিজ্ঞেস করো (\"কল করব?\")"
-            isChecked = prefs.getBoolean("confirmCall", true)
-        }
-        root.addView(confirmBox)
-        simStatus = TextView(this)
-        root.addView(simStatus)
+        // --- calls ---
+        val calls = ui.card("কল ও কন্টাক্ট")
+        val (cfRow, cfSw) = ui.switchRow("কল করার আগে জিজ্ঞেস করা", "\"কল করব?\"। সার্ভারের বেছে নেওয়া কল সবসময় জিজ্ঞেস করা হয়", prefs.getBoolean("confirmCall", true))
+        confirmBox = cfSw; saveOn(cfSw)
+        calls.addView(cfRow)
+        simStatus = ui.statusText()
+        calls.addView(simStatus)
         simGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(simGroup)
-        nickInput = EditText(this).apply {
-            hint = "উপনাম, প্রতি লাইনে একটি: বাবা = রহিম উদ্দিন"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setText(prefs.getString("nicknames", ""))
-            minLines = 2
-        }
-        root.addView(nickInput)
-        root.addView(button("উপনাম সেভ") { saveSettings(); LogStore.add(this@MainActivity, "উপনাম সেভ হয়েছে") })
+        calls.addView(simGroup)
+        calls.addView(ui.label("উপনাম", 14f, bold = true))
+        nickInput = ui.input("প্রতি লাইনে একটি: বাবা = রহিম উদ্দিন", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE, prefs.getString("nicknames", "") ?: "", 2)
+        calls.addView(nickInput)
+        calls.addView(ui.tonal("উপনাম সেভ") { saveSettings(); LogStore.add(this, "উপনাম সেভ হয়েছে") })
+        col.addView(calls)
 
-        root.addView(TextView(this).apply {
-            text = "LLM ফলব্যাক (ঐচ্ছিক, ইন্টারনেট লাগে)"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
-        })
-        root.addView(TextView(this).apply {
-            text = "চালু থাকলে, যে বাক্য অফলাইনে বোঝা যায় না শুধু সেই বাক্যের লেখাটুকু আপনার নিজের সার্ভারে (প্রক্সি) যায়। কন্টাক্ট বা অন্য কিছু যায় না। বন্ধ থাকলে কিছুই বাইরে যায় না।"
-        })
-        llmBox = CheckBox(this).apply {
-            text = "অবোধ্য কমান্ড LLM-কে জিজ্ঞেস করো"
-            isChecked = prefs.getBoolean(AndroidLlm.KEY_ENABLED, false)
-        }
-        root.addView(llmBox)
-        llmUrlInput = EditText(this).apply {
-            hint = "প্রক্সির ঠিকানা: https://.../api/assist"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setText(prefs.getString(AndroidLlm.KEY_URL, ""))
-        }
-        root.addView(llmUrlInput)
-        llmTokenInput = EditText(this).apply {
-            hint = "টোকেন (প্রক্সির APP_TOKEN)"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setText(prefs.getString(AndroidLlm.KEY_TOKEN, ""))
-        }
-        root.addView(llmTokenInput)
-        root.addView(TextView(this).apply {
-            text = "স্ক্রিন-এজেন্ট (আলাদা সুইচ): বড় কাজ, যেমন \"WhatsApp-এ রহিমকে হাই পাঠাও\", Claude ধাপে ধাপে স্ক্রিন দেখে ট্যাপ ও টাইপ করে করে। চালু থাকলে কাজ চলার সময় স্ক্রিনের লেখা আপনার সার্ভারে যায়। পাসওয়ার্ডের স্ক্রিন ও টাকার অ্যাপ (বিকাশ, নগদ, ব্যাংক) কখনো পড়া বা পাঠানো হয় না, লম্বা সংখ্যা ঢেকে যায়। পাঠানো, কেনা, মোছা, কল: এসব বাটন চাপার আগে আপনাকে জিজ্ঞেস করে। নোটিফিকেশনে \"থামাও\" বোতাম থাকে। Accessibility চালু থাকতে হবে।"
-        })
-        agentBox = CheckBox(this).apply {
-            text = "স্ক্রিন-এজেন্ট চালু করো"
-            isChecked = prefs.getBoolean(AndroidLlm.KEY_AGENT, false)
-        }
-        root.addView(agentBox)
-        llmStatus = TextView(this)
-        root.addView(llmStatus)
-        root.addView(button("LLM সেটিং সেভ করো") {
+        // --- smart assistant (LLM) ---
+        val llm = ui.card("স্মার্ট সহকারী (ঐচ্ছিক, ইন্টারনেট লাগে)", "আপনার নিজের প্রক্সি সার্ভার দিয়ে চলে। বন্ধ থাকলে কিছুই বাইরে যায় না")
+        val (lRow, lSw) = ui.switchRow("না বুঝলে LLM-কে জিজ্ঞেস করা", "শুধু যে বাক্য অফলাইনে বোঝা যায়নি, সেটুকুর লেখা যায়। কন্টাক্ট বা অন্য কিছু যায় না", prefs.getBoolean(AndroidLlm.KEY_ENABLED, false))
+        llmBox = lSw
+        llm.addView(lRow)
+        llmUrlInput = ui.input("https://.../api/assist", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, prefs.getString(AndroidLlm.KEY_URL, "") ?: "")
+        llm.addView(llmUrlInput)
+        llmTokenInput = ui.input("টোকেন (প্রক্সির APP_TOKEN)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, prefs.getString(AndroidLlm.KEY_TOKEN, "") ?: "")
+        llm.addView(llmTokenInput)
+        llm.addView(ui.divider())
+        val (aRow, aSw) = ui.switchRow("স্ক্রিন-এজেন্ট", "বড় কাজ, যেমন \"WhatsApp-এ রহিমকে হাই পাঠাও\": স্ক্রিন দেখে ধাপে ধাপে ট্যাপ ও টাইপ করে। চালু থাকলে কাজ চলার সময় স্ক্রিনের লেখা আপনার সার্ভারে যায়", prefs.getBoolean(AndroidLlm.KEY_AGENT, false))
+        agentBox = aSw
+        llm.addView(aRow)
+        llm.addView(ui.expandable("নিরাপত্তা", "পাসওয়ার্ডের স্ক্রিন ও টাকার অ্যাপ (বিকাশ, নগদ, ব্যাংক) কখনো পড়া বা পাঠানো হয় না, লম্বা সংখ্যা ঢেকে যায়। পাঠানো, কেনা, মোছা, কল: এসব বাটন চাপার আগে আপনাকে জিজ্ঞেস করে। নোটিফিকেশনে \"থামাও\" বোতাম থাকে। Accessibility চালু থাকতে হবে।"))
+        llmStatus = ui.statusText()
+        llm.addView(llmStatus)
+        llm.addView(ui.pair(ui.primary("সেভ করুন") {
             saveSettings()
             llmStatus.text = (if (llmBox.isChecked) "LLM চালু" else "LLM বন্ধ") + ", " + (if (agentBox.isChecked) "স্ক্রিন-এজেন্ট চালু" else "স্ক্রিন-এজেন্ট বন্ধ") + " (সেভ হয়েছে)"
-        })
-        root.addView(button("LLM সংযোগ টেস্ট") {
+            refreshSttNote()
+        }, ui.quiet("সংযোগ টেস্ট") {
             saveSettings()
             llmStatus.text = "পরীক্ষা করছি…"
             AndroidLlm.test(this) { llmStatus.text = it }
-        })
+        }))
+        col.addView(llm)
 
-        root.addView(button("▶ শোনা শুরু (\"Hey BuildX\")") { startListening() })
-        root.addView(button("■ শোনা বন্ধ") {
-            startService(Intent(this, WakeService::class.java).setAction(WakeService.ACTION_STOP))
-        })
+        val safe = ui.card("নিরাপত্তা", "যা সবসময় আপনাকে জিজ্ঞেস করে করা হয়")
+        safe.addView(ui.hint("• এসএমএস/WhatsApp মেসেজ: পড়ে শুনিয়ে \"পাঠাব?\" জিজ্ঞেস করে, হ্যাঁ বললে তবেই যায়\n• কল: নাম ও নম্বর বলে জিজ্ঞেস করে (সুইচ বন্ধ থাকলেও সার্ভারের বেছে নেওয়া কল জিজ্ঞেস করে)\n• সার্ভারের বেছে নেওয়া এয়ারপ্লেন, হটস্পট, মোবাইল ডেটা, DND: আগে জিজ্ঞেস করে\n• নিজে নিজে চলা রুটিনে কল বা মেসেজ চলে না"))
+        col.addView(safe)
+        return sv
+    }
 
-        root.addView(TextView(this).apply {
-            text = "টেস্ট"
-            textSize = 16f
-            setTypeface(typeface, Typeface.BOLD)
+    private fun seek(min: Int, max: Int, start: Int, onChange: (Int) -> Unit, onDone: (Int) -> Unit): SeekBar = SeekBar(this).apply {
+        this.max = max - min
+        progress = start
+        progressTintList = ColorStateList.valueOf(ui.c(R.color.bx_primary))
+        thumbTintList = ColorStateList.valueOf(ui.c(R.color.bx_primary))
+        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) = onChange(p)
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) = onDone(sb.progress)
         })
-        root.addView(button("🔊 TTS টেস্ট (আওয়াজ আসছে?)") { testTts() })
-        root.addView(button("TTS সেটিংস খুলুন (ইঞ্জিন/ভয়েজ ডেটা)") { openTtsSettings() })
-        root.addView(button("🎤 কথা বলো (wake word ছাড়াই পুরো ধারা)") { talkNow() })
-        root.addView(button("STT টেস্ট (শুধু বাক্য চেনা)") { runSttTest() })
+    }
 
-        cmdInput = EditText(this).apply {
-            hint = "লিখে কমান্ড দিন (যেমন: এখন কয়টা বাজে)"
-            inputType = InputType.TYPE_CLASS_TEXT
+    private fun savePhrase() {
+        when (val r = WakePhrase.parse(phraseInput.text.toString(), ModelManager.vocabulary(this))) {
+            is WakePhrase.Parse.Ok -> {
+                prefs.edit().putString("wakePhrase", if (r.phrase.isDefault) "" else r.phrase.text).apply()
+                phraseStatus.text = "✓ সেভ হয়েছে: \"${r.phrase.display}\"" +
+                    (if (WakeService.running) "। শোনা বন্ধ করে আবার চালু করলে কাজ করবে" else "") +
+                    (if (VoiceLockStore.hasPrint(this) && !r.phrase.isDefault) "।\nকণ্ঠ-লক চালু থাকলে নতুন ওয়েক ওয়ার্ডে আবার রেজিস্টার করুন" else "") +
+                    (if (ModelManager.vocabulary(this) == null) "।\n(মডেলের শব্দ তালিকা না পাওয়ায় শব্দ যাচাই হয়নি, ধরছে কি না লগে দেখুন)" else "")
+                LogStore.add(this, "ওয়েক ওয়ার্ড সেভ: ${r.phrase.text}")
+                refreshHome()
+            }
+            is WakePhrase.Parse.Bad -> phraseStatus.text = "✗ ${r.reason}"
         }
-        root.addView(cmdInput)
-        root.addView(button("লিখে কমান্ড চালাও") { runTextCommand() })
-        root.addView(button("কী বুঝবে দেখাও (কিছু চালানো ছাড়া, ধাপ ভাগ সহ)") { dryRun() })
-        root.addView(button("কন্টাক্ট মেলাও (লেখা নামটা কার সাথে মেলে, কল ছাড়া)") { testContactMatch() })
+    }
 
-        root.addView(button("লগ কপি") {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("buildx-log", LogStore.read(this)))
-        })
-        root.addView(button("লগ মুছুন") { LogStore.clear(this) })
+    private fun refreshSttNote() {
+        val mode = SttMode.from(prefs.getString("sttMode", "system"))
+        val configured = WhisperStt.configFrom(this) != null
+        sttNote.text = when {
+            mode == SttMode.SYSTEM -> "ফোনের নিজস্ব ইঞ্জিন ব্যবহার হচ্ছে"
+            !configured -> "⚠ Whisper-এর জন্য নিচের কার্ডে https ঠিকানা ও টোকেন দিয়ে সেভ করুন, নাহলে ফোনের ইঞ্জিনই চলবে"
+            else -> "Whisper চালু: ${SttEndpoint.fromAssistUrl(prefs.getString(AndroidLlm.KEY_URL, ""))}"
+        }
+    }
 
+    private fun refreshTtsInfo() {
+        val v = prefs.getString("ttsVoice", "").orEmpty()
+        ttsInfo.text = if (v.isEmpty()) "ভয়েস: অটো (সবচেয়ে ভালো অফলাইন ভয়েস)" else "ভয়েস: $v"
+    }
+
+    /** lists the installed voices of the chosen language; the person picks one, or "auto" */
+    private fun pickVoice() {
+        val sp = Speaker(this)
+        sp.init(currentLang()) {
+            if (isDestroyed) { sp.shutdown(); return@init }
+            val list = sp.voices()
+            if (list.isEmpty()) {
+                Toast.makeText(this, "এই ভাষার ভয়েস পাওয়া যায়নি। \"ইঞ্জিন সেটিংস\" থেকে ভয়েস ডেটা নামান", Toast.LENGTH_LONG).show()
+                sp.shutdown()
+                return@init
+            }
+            val names = listOf("অটো (সবচেয়ে ভালো অফলাইন ভয়েস)") + list.map { it.label + (if (it.needsNetwork) " · ইন্টারনেট লাগে" else "") }
+            AlertDialog.Builder(this)
+                .setTitle("ভয়েস বাছুন")
+                .setItems(names.toTypedArray()) { _, i ->
+                    prefs.edit().putString("ttsVoice", if (i == 0) "" else list[i - 1].name).apply()
+                    speaker?.shutdown(); speaker = null
+                    refreshTtsInfo()
+                    testTts()
+                }
+                .setOnDismissListener { sp.shutdown() }
+                .show()
+        }
+    }
+
+    // ---------- tab 4: tests and log ----------
+
+    private fun buildTools(): View {
+        val (sv, col) = ui.page()
+
+        val quick = ui.card("দ্রুত পরীক্ষা")
+        quick.addView(ui.tonal("🔊  TTS টেস্ট (আওয়াজ আসছে?)") { testTts() })
+        quick.addView(ui.tonal("🎤  কথা বলো (ওয়েক ওয়ার্ড ছাড়াই পুরো ধারা)") { talkNow() })
+        quick.addView(ui.tonal("STT টেস্ট (শুধু বাক্য চেনা)") { runSttTest() })
+        col.addView(quick)
+
+        val an = ui.card("কমান্ড বিশ্লেষণ", "কিছু চালানো ছাড়া দেখুন কী বুঝবে")
+        testInput = ui.input("একটা বাক্য বা নাম লিখুন")
+        an.addView(testInput)
+        an.addView(ui.pair(ui.primary("কী বুঝবে") { dryRun() }, ui.quiet("কন্টাক্ট মেলাও") { testContactMatch() }))
+        col.addView(an)
+
+        val rep = ui.card("চেকলিস্ট ও রিপোর্ট")
+        rep.addView(ui.primary("চেকলিস্ট খুলুন (প্রতি ফোনে)") { startActivity(Intent(this, ChecklistActivity::class.java)) })
+        rep.addView(ui.pair(ui.quiet("ডিভাইস রিপোর্ট কপি") { copyDeviceReport() }, ui.quiet("ক্র্যাশ লগ কপি") { copyCrashLog() }))
+        rep.addView(ui.quiet("ক্র্যাশ লগ মুছুন") { CrashLog.clear(this); refreshStability() })
+        col.addView(rep)
+
+        val log = ui.card("লগ")
         logView = TextView(this).apply {
             typeface = Typeface.MONOSPACE
-            textSize = 12f
+            textSize = 11.5f
+            setTextColor(ui.c(R.color.bx_log_text))
+            background = ui.rounded(ui.c(R.color.bx_log_bg), 12)
+            setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
             setTextIsSelectable(true)
         }
-        root.addView(logView)
-
-        val scroll = ScrollView(this)
-        scroll.addView(root)
-        setContentView(scroll)
+        log.addView(logView)
+        log.addView(ui.pair(ui.quiet("লগ কপি") {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("buildx-log", LogStore.read(this)))
+            Toast.makeText(this, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
+        }, ui.quiet("লগ মুছুন") { LogStore.clear(this) }))
+        col.addView(log)
+        return sv
     }
 
     override fun onResume() {
@@ -392,12 +630,15 @@ class MainActivity : Activity() {
         refreshAssistant()
         refreshStability()
         refreshVoice()
+        refreshSttNote()
+        refreshTtsInfo()
         refreshLog()
         LogStore.listener = { runOnUiThread { refreshLog() } }
     }
 
     override fun onPause() {
         LogStore.listener = null
+        saveSettings()
         super.onPause()
     }
 
@@ -503,9 +744,9 @@ class MainActivity : Activity() {
 
     /** Shows how a sentence would be split into steps and what each step means. Nothing is run. */
     private fun dryRun() {
-        val text = cmdInput.text.toString().trim()
+        val text = testInput.text.toString().trim()
         if (text.isEmpty()) {
-            LogStore.add(this, "উপরের ঘরে একটা বাক্য লিখুন, তারপর এই বাটন")
+            LogStore.add(this, "ঘরে একটা বাক্য লিখুন, তারপর এই বাটন")
             return
         }
         val steps = IntentParser.parseChain(text)
@@ -517,9 +758,9 @@ class MainActivity : Activity() {
 
     /** Shows which contact a spoken/typed name would pick and how sure it is. Nothing is called. */
     private fun testContactMatch() {
-        val name = cmdInput.text.toString().trim()
+        val name = testInput.text.toString().trim()
         if (name.isEmpty()) {
-            LogStore.add(this, "উপরের ঘরে একটা নাম লিখুন, তারপর এই বাটন")
+            LogStore.add(this, "ঘরে একটা নাম লিখুন, তারপর এই বাটন")
             return
         }
         saveSettings()
@@ -714,7 +955,7 @@ class MainActivity : Activity() {
             LogStore.add(this, "আগে \"শোনা চালু করুন\" চাপুন, তারপর রেজিস্টার")
             return
         }
-        LogStore.add(this, "কণ্ঠ রেজিস্টার: ৫ বার \"Hey Build\" বলুন, প্রতিবার একটু থেমে (৯০ সেকেন্ড সময়)")
+        LogStore.add(this, "কণ্ঠ রেজিস্টার: ৫ বার \"${WakePhrase.fromPref(prefs.getString("wakePhrase", "")).display}\" বলুন, প্রতিবার একটু থেমে (৯০ সেকেন্ড সময়)")
         svc.startEnroll(5, { n, d ->
             LogStore.add(this, "কণ্ঠ নমুনা $n/৫${d?.let { " (গড় থেকে দূরত্ব ${"%.2f".format(it)})" } ?: ""}")
         }, { ok, msg ->
@@ -896,38 +1137,26 @@ class MainActivity : Activity() {
     // ---------- UI helpers ----------
 
     private fun refreshPermStatus() {
-        val mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        val notif = Build.VERSION.SDK_INT < 33 ||
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val battery = pm.isIgnoringBatteryOptimizations(packageName)
-        fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
-        permStatus.text = "মাইক: ${tick(mic)}   নোটিফিকেশন: ${tick(notif)}   ব্যাটারি ছাড়: ${tick(battery)}\n" +
-            "কল: ${tick(has(Manifest.permission.CALL_PHONE))}   কন্টাক্ট: ${tick(has(Manifest.permission.READ_CONTACTS))}   " +
-            "ক্যামেরা: ${tick(has(Manifest.permission.CAMERA))}   ফোন-অবস্থা: ${tick(has(Manifest.permission.READ_PHONE_STATE))}   ওভারলে: ${tick(BackgroundLauncher.canOverlay(this))}\n" +
-            "এসএমএস পাঠানো: ${tick(has(Manifest.permission.SEND_SMS))}   এসএমএস পড়া: ${tick(has(Manifest.permission.READ_SMS))}   নোটিফিকেশন পড়া: ${tick(BuildXNotificationListener.isEnabledInSettings(this))}\n" +
-            "সেটিংস বদল: ${tick(Settings.System.canWrite(this))}   DND: ${tick((getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted)}"
+        for (r in statusRows) r.refresh()
+        refreshHome()
     }
 
     private fun refreshModelStatus() {
         modelStatus.text = when {
-            ModelManager.isReady(this) -> "wake word মডেল: প্রস্তুত ✓"
-            ModelManager.downloading -> "wake word মডেল: নামছে... (লগে অগ্রগতি দেখুন)"
-            else -> "wake word মডেল: নেই ✗"
+            ModelManager.isReady(this) -> ""
+            ModelManager.downloading -> "মডেল নামছে... (লগে অগ্রগতি দেখুন)"
+            else -> ""
         }
+        refreshPermStatus()
     }
 
     private fun tick(ok: Boolean): String = if (ok) "✓" else "✗"
 
+    /** the home tab shows the last few lines; the full log (can be 200 KB) is only put on screen while its tab is open */
     private fun refreshLog() {
-        logView.text = LogStore.read(this)
+        val all = LogStore.read(this)
+        homeLog.text = lastLines(all)
+        if (currentTab == 3) logView.text = all
+        refreshHome()
     }
-
-    private fun button(label: String, onClick: () -> Unit): Button =
-        Button(this).apply {
-            text = label
-            setOnClickListener { onClick() }
-        }
-
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 }
