@@ -58,6 +58,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.BuildX"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -171,6 +172,13 @@
             android:exported="false" />
         <receiver
             android:name=".routine.RoutineAlarmReceiver"
+            android:exported="false" />
+        <!-- Phase 6: alarms with an exact date (the Clock app's intent cannot take one). Rings, with Stop / Snooze buttons. -->
+        <receiver
+            android:name=".reminder.DatedAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminder.DatedAlarmActionReceiver"
             android:exported="false" />
         <receiver
             android:name=".reminder.ReminderBootReceiver"

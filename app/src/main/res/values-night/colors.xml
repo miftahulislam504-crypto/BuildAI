@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bx_bg">#0F1219</color>
+    <color name="bx_surface">#181C26</color>
+    <color name="bx_surface_alt">#222735</color>
+    <color name="bx_outline">#2F3547</color>
+    <color name="bx_primary">#8FAAFF</color>
+    <color name="bx_on_primary">#0B1B5A</color>
+    <color name="bx_primary_container">#24336E</color>
+    <color name="bx_on_primary_container">#DCE4FF</color>
+    <color name="bx_text">#E7EAF2</color>
+    <color name="bx_text2">#A2A9BB</color>
+    <color name="bx_ok">#5CD38C</color>
+    <color name="bx_ok_container">#17372A</color>
+    <color name="bx_warn">#F2B45A</color>
+    <color name="bx_warn_container">#3D2E12</color>
+    <color name="bx_bad">#FF8A8A</color>
+    <color name="bx_bad_container">#431A1A</color>
+    <color name="bx_log_bg">#0A0C11</color>
+    <color name="bx_log_text">#C9D2E6</color>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- follows the phone's light/dark setting; the colours come from colors.xml (and values-night) -->
+    <style name="Theme.BuildX" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowBackground">@color/bx_bg</item>
+        <item name="android:statusBarColor">@color/bx_bg</item>
+        <item name="android:navigationBarColor">@color/bx_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">@color/bx_text</item>
+        <item name="android:textColorSecondary">@color/bx_text2</item>
+        <item name="android:colorAccent">@color/bx_primary</item>
+        <item name="android:colorControlActivated">@color/bx_primary</item>
+    </style>
+</resources>
