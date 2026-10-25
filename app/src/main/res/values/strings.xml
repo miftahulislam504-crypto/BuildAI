@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="a11y_desc">BuildX AI এটা ব্যবহার করে আপনার বলা কমান্ডে: স্ক্রিন লক, ব্যাক/হোম/স্ক্রিনশট, ওয়াইফাই-ব্লুটুথ টগল, "ট্যাপ করো…", "টাইপ করো…", স্ক্রিন পড়ে শোনানো। কিছুই জমা থাকে না। শুধু আপনি "স্ক্রিন-এজেন্ট" চালু করলে, কাজ চলার সময় স্ক্রিনের লেখা (পাসওয়ার্ড ও টাকার অ্যাপ বাদে) আপনার নিজের সার্ভারে যায়।</string>
+    <string name="a11y_desc">BuildX AI uses this for the commands you speak: locking the screen, back, home and screenshot, toggling Wi-Fi and Bluetooth, \"tap ...\", \"type ...\", and reading the screen aloud. Nothing is stored. Only if you turn on the \"screen agent\", the text on screen while a task runs (except password screens and money apps) is sent to your own server.</string>
 </resources>

@@ -50,36 +50,36 @@ class ChecklistTest {
     }
     @Test fun formatShowsMarksPerPhase() {
         val text = Checklist.format("Xiaomi Redmi Note 12", mapOf("wake10" to Checklist.Result.PASS, "lock" to Checklist.Result.FAIL))
-        Assert.assertTrue(text.startsWith("চেকলিস্ট: Xiaomi Redmi Note 12"))
-        Assert.assertTrue(text.contains("✓ \"Hey BuildX\" ১০ বারে"))
-        Assert.assertTrue(text.contains("✗ স্ক্রিন লক হয়"))
-        Assert.assertTrue(text.contains("- ফ্ল্যাশলাইট"))
-        Assert.assertTrue(text.contains("ফেজ 5"))
+        Assert.assertTrue(text.startsWith("Checklist: Xiaomi Redmi Note 12"))
+        Assert.assertTrue(text.contains("[pass] \"Hey BuildX\" wakes it"))
+        Assert.assertTrue(text.contains("[fail] Locks the screen"))
+        Assert.assertTrue(text.contains("[ - ] Flashlight"))
+        Assert.assertTrue(text.contains("Phase 5"))
     }
 }
 
 class DeviceReportTest {
     private fun info(crash: String? = null, died: Boolean = false) = DeviceInfo(
-        "Xiaomi", "Redmi", "23053RN02A", 33, "13", "0.7.0 (8)", "bn-BD", "মাঝারি",
-        linkedMapOf("মাইক" to true, "কল" to false), true, died, if (died) 2 else 0, crash, listOf("12:00 WAKE", "12:01 CMD")
+        "Xiaomi", "Redmi", "23053RN02A", 33, "13", "0.7.0 (8)", "bn-BD", "Medium",
+        linkedMapOf("Microphone" to true, "Calls" to false), true, died, if (died) 2 else 0, crash, listOf("12:00 WAKE", "12:01 CMD")
     )
 
     @Test fun containsTheEssentials() {
         val t = DeviceReport.format(info())
-        Assert.assertTrue(t.contains("Xiaomi 23053RN02A (Redmi), Android 13 (SDK 33), গ্রুপ: XIAOMI"))
-        Assert.assertTrue(t.contains("✓ মাইক") && t.contains("✗ কল"))
-        Assert.assertTrue(t.contains("ক্র্যাশ: নেই"))
+        Assert.assertTrue(t.contains("Xiaomi 23053RN02A (Redmi), Android 13 (SDK 33), group: XIAOMI"))
+        Assert.assertTrue(t.contains("Microphone: granted") && t.contains("Calls: missing"))
+        Assert.assertTrue(t.contains("Crashes: none"))
         Assert.assertTrue(t.contains("12:00 WAKE"))
-        Assert.assertTrue(t.contains("সার্ভিস এখন: চলছে"))
+        Assert.assertTrue(t.contains("Service now: running"))
     }
     @Test fun saysWhenTheServiceDied() {
         val t = DeviceReport.format(info(died = true))
-        Assert.assertTrue(t.contains("হ্যাঁ, গতবার") && t.contains("মোট 2 বার"))
+        Assert.assertTrue(t.contains("yes, last time") && t.contains("2 times in total"))
     }
     @Test fun crashIsShortened() {
         val long = (1..40).joinToString("\n") { "at line $it" }
         val t = DeviceReport.format(info(crash = long))
-        Assert.assertTrue(t.contains("শেষ ক্র্যাশ:") && t.contains("at line 12") && !t.contains("at line 13"))
+        Assert.assertTrue(t.contains("Last crash:") && t.contains("at line 12") && !t.contains("at line 13"))
     }
 }
 

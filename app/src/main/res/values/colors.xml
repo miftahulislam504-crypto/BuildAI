@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bx_bg">#F4F6FA</color>
+    <color name="bx_bg">#FAFAF9</color>
     <color name="bx_surface">#FFFFFF</color>
-    <color name="bx_surface_alt">#EDF0F7</color>
-    <color name="bx_outline">#D9DEE8</color>
-    <color name="bx_primary">#2F5BEA</color>
+    <color name="bx_surface_alt">#F3F3F1</color>
+    <color name="bx_outline">#E7E7E4</color>
+    <color name="bx_primary">#17171A</color>
     <color name="bx_on_primary">#FFFFFF</color>
-    <color name="bx_primary_container">#E1E8FF</color>
-    <color name="bx_on_primary_container">#16307F</color>
-    <color name="bx_text">#171B26</color>
-    <color name="bx_text2">#5A6275</color>
-    <color name="bx_ok">#1E8E4E</color>
-    <color name="bx_ok_container">#DDF3E6</color>
-    <color name="bx_warn">#B26A00</color>
-    <color name="bx_warn_container">#FFEFD2</color>
-    <color name="bx_bad">#C62F2F</color>
-    <color name="bx_bad_container">#FBE0E0</color>
-    <color name="bx_log_bg">#12151D</color>
-    <color name="bx_log_text">#C9D2E6</color>
+    <color name="bx_primary_container">#EFEFEC</color>
+    <color name="bx_on_primary_container">#17171A</color>
+    <color name="bx_text">#17171A</color>
+    <color name="bx_text2">#75757D</color>
+    <color name="bx_ok">#17824F</color>
+    <color name="bx_ok_container">#E6F4EC</color>
+    <color name="bx_warn">#A86A12</color>
+    <color name="bx_warn_container">#FBF0DC</color>
+    <color name="bx_bad">#C23B33</color>
+    <color name="bx_bad_container">#FBE7E5</color>
+    <color name="bx_log_bg">#111114</color>
+    <color name="bx_log_text">#CBCBD3</color>
 </resources>
