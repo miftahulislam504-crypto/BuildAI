@@ -29,6 +29,15 @@ android {
     val hasReleaseKey = !keystorePath.isNullOrBlank() && file(keystorePath).exists() &&
         !System.getenv("BUILDX_KEYSTORE_PASSWORD").isNullOrBlank() && !System.getenv("BUILDX_KEY_ALIAS").isNullOrBlank()
     signingConfigs {
+        // Debug builds are always signed with the key kept in the repo (app/debug.keystore, the standard public
+        // debug credentials). Without this every CI run makes a brand-new random debug key, so a new APK can never
+        // be installed over the old one ("App not installed as package conflicts with an existing package").
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseKey) {
             create("release") {
                 storeFile = file(keystorePath!!)

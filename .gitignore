@@ -1,5 +1,6 @@
 *.jks
 *.keystore
+!app/debug.keystore
 local.properties
 build/
 .gradle/
