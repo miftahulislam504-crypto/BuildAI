@@ -79,7 +79,7 @@ class WhisperStt(private val ctx: Context, private val cfg: LlmConfig) {
         try {
             ar.startRecording()
             if (ar.recordingState != AudioRecord.RECORDSTATE_RECORDING) return null
-            LogStore.add(ctx, "STT[whisper]: বলুন")
+            LogStore.add(ctx, "STT[whisper]: speak now")
             val frame = ShortArray(FRAME)
             var waited = 0
             while (!cancelled) {
@@ -125,7 +125,7 @@ class WhisperStt(private val ctx: Context, private val cfg: LlmConfig) {
             val code = conn.responseCode
             val body = readCapped(if (code in 200..299) conn.inputStream else conn.errorStream)
             val t = Transcript.parse(code, body)
-            LogStore.add(ctx, "STT[whisper] [$lang] ${pcm.size / 16}ms অডিও -> ${if (t is Transcript.Text) "\"${t.text}\"" else t} (${System.currentTimeMillis() - t0}ms)")
+            LogStore.add(ctx, "STT[whisper] [$lang] ${pcm.size / 16}ms of audio -> ${if (t is Transcript.Text) "\"${t.text}\"" else t} (${System.currentTimeMillis() - t0}ms)")
             t
         } catch (e: SocketTimeoutException) {
             Transcript.Failed("timeout")

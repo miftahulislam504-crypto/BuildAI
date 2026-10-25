@@ -2,9 +2,9 @@ package com.buildx.ai.wake
 
 /** How easily "Hey Build" fires. A false trigger costs a "জি, বলুন"; a missed one costs the person a repeat. */
 enum class WakeSensitivity(val label: String) {
-    LOW("কম (শেষে নিশ্চিত হয়ে, ভুল ট্রিগার সবচেয়ে কম)"),
-    NORMAL("মাঝারি (কথা শেষ হলে)"),
-    HIGH("বেশি (বলার মাঝেই ধরে, ভুল ট্রিগার বাড়তে পারে)");
+    LOW("Low (confirms at the end of speech, fewest false triggers)"),
+    NORMAL("Medium (when you finish speaking)"),
+    HIGH("High (catches it mid-sentence, may trigger falsely more often)");
 
     companion object {
         fun from(i: Int): WakeSensitivity = values().getOrElse(i) { NORMAL }

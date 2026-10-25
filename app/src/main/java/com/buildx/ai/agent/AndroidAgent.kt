@@ -86,17 +86,17 @@ object AgentNotifier {
 
     fun show(ctx: Context, goal: String) {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "BuildX স্ক্রিন-এজেন্ট", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "BuildX screen agent", NotificationManager.IMPORTANCE_HIGH))
         val stop = PendingIntent.getBroadcast(
             ctx, 0, Intent(ctx, AgentStopReceiver::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE
         )
         val n = Notification.Builder(ctx, CHANNEL)
-            .setContentTitle("BuildX ফোন চালাচ্ছে")
+            .setContentTitle("BuildX is operating the phone")
             .setContentText(goal.take(80))
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setOngoing(true)
             .setTimeoutAfter(UiAgent.MAX_MILLIS + 30_000) // never left behind if a task is abandoned
-            .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_delete), "থামাও", stop).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_delete), "Stop", stop).build())
             .build()
         nm.notify(ID, n)
     }
@@ -110,6 +110,6 @@ class AgentStopReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         AgentRunner.current?.cancel()
         AgentNotifier.hide(context)
-        LogStore.add(context, "AGENT থামানো হলো (নোটিফিকেশন থেকে)")
+        LogStore.add(context, "AGENT stopped (from the notification)")
     }
 }

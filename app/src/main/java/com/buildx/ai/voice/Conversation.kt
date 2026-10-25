@@ -31,18 +31,18 @@ class Conversation(
     /** [onFinished] runs after the last spoken sentence (not when cancelled). */
     fun run(onFinished: () -> Unit) {
         this.onFinished = {
-            onEvent("✓ " + say("শেষ", "done"))
+            onEvent("Done")
             onFinished()
         }
-        onEvent("🎙 " + say("শুনছি…", "listening…"))
+        onEvent("Listening...")
         speaker.speak(say("জি, বলুন", "Yes, go ahead")) {
             if (cancelled) return@speak
             listen { text ->
                 if (text.isNullOrBlank()) {
-                    onEvent(say("কিছু শুনতে পাইনি", "heard nothing"))
+                    onEvent("Heard nothing")
                     finishWith(say("বুঝতে পারিনি", "Sorry, I didn't catch that"))
                 } else {
-                    onEvent(say("শুনলাম: ", "heard: ") + "\"$text\"")
+                    onEvent("Heard: \"$text\"")
                     deliver(CommandPipeline.run(ActionContext(ctx, lang), text))
                 }
             }
@@ -66,7 +66,7 @@ class Conversation(
 
     /** speak the result; if it holds a question, listen for the answer and continue */
     private fun deliver(result: ActionResult) {
-        if (result.message.isNotBlank()) onEvent((if (result.followUp != null) "❓ " else if (result.success) "→ " else "✗ ") + result.message)
+        if (result.message.isNotBlank()) onEvent((if (result.followUp != null) "Question: " else if (result.success) "Result: " else "Failed: ") + result.message)
         val later = result.deferred
         if (later != null) {
             // the real answer comes from the phone a moment later (screen locked? switch flipped?)
@@ -80,9 +80,9 @@ class Conversation(
             if (follow == null) {
                 onFinished()
             } else {
-                onEvent("🎙 " + say("উত্তর শুনছি…", "listening for your answer…"))
+                onEvent("Listening for your answer...")
                 listen { reply ->
-                    onEvent(say("শুনলাম: ", "heard: ") + "\"${reply ?: ""}\"")
+                    onEvent("Heard: \"${reply ?: ""}\"")
                     val next = try {
                         follow.onReply(reply)
                     } catch (e: Exception) {

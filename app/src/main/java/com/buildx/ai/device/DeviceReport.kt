@@ -23,19 +23,19 @@ object DeviceReport {
     fun format(i: DeviceInfo): String {
         val maker = OemGuide.detect(i.manufacturer, i.brand)
         val sb = StringBuilder()
-        sb.append("BuildX রিপোর্ট\n")
-        sb.append("ফোন: ${i.manufacturer} ${i.model} (${i.brand}), Android ${i.release} (SDK ${i.sdk}), গ্রুপ: $maker\n")
-        sb.append("অ্যাপ: ${i.appVersion}, ভাষা: ${i.lang}, wake সংবেদনশীলতা: ${i.wakeSensitivity}\n")
-        sb.append("সার্ভিস এখন: ${if (i.serviceRunning) "চলছে" else "বন্ধ"}\n")
-        sb.append("সার্ভিস নিজে বন্ধ না হয়ে মরেছে: ${if (i.diedLastTime) "হ্যাঁ, গতবার" else "না"} (মোট ${i.killCount} বার)\n")
-        sb.append("পারমিশন:\n")
-        for ((k, v) in i.permissions) sb.append("  ${if (v) "✓" else "✗"} $k\n")
+        sb.append("BuildX report\n")
+        sb.append("Phone: ${i.manufacturer} ${i.model} (${i.brand}), Android ${i.release} (SDK ${i.sdk}), group: $maker\n")
+        sb.append("App: ${i.appVersion}, language: ${i.lang}, wake sensitivity: ${i.wakeSensitivity}\n")
+        sb.append("Service now: ${if (i.serviceRunning) "running" else "stopped"}\n")
+        sb.append("Service died instead of stopping cleanly: ${if (i.diedLastTime) "yes, last time" else "no"} (${i.killCount} times in total)\n")
+        sb.append("Permissions:\n")
+        for ((k, v) in i.permissions) sb.append("  $k: ${if (v) "granted" else "missing"}\n")
         if (!i.lastCrash.isNullOrBlank()) {
-            sb.append("শেষ ক্র্যাশ:\n").append(i.lastCrash.trim().lines().take(12).joinToString("\n") { "  $it" }).append('\n')
+            sb.append("Last crash:\n").append(i.lastCrash.trim().lines().take(12).joinToString("\n") { "  $it" }).append('\n')
         } else {
-            sb.append("ক্র্যাশ: নেই\n")
+            sb.append("Crashes: none\n")
         }
-        sb.append("লগের শেষ ${i.logTail.size} লাইন:\n")
+        sb.append("Last ${i.logTail.size} log lines:\n")
         for (l in i.logTail) sb.append("  ").append(l).append('\n')
         return sb.toString().trimEnd()
     }

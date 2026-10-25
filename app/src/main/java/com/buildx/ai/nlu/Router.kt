@@ -36,7 +36,7 @@ object CommandPipeline {
         if (steps.any { it.intent == "unknown" }) {
             val llm = AndroidLlm.fallback(ac.context)
             if (llm != null) {
-                LogStore.add(ac.context, "LLM \"$text\" -> অফলাইনে বুঝিনি, সার্ভারকে জিজ্ঞেস করছি")
+                LogStore.add(ac.context, "LLM \"$text\" -> not understood offline, asking the server")
                 return llm.resolve(text, ac.lang, ac.bn, AndroidLlm.agentOn(ac.context)) { planned -> runSteps(ac, planned, text) }
             }
         }
@@ -56,7 +56,7 @@ object CommandPipeline {
     /** runs a saved routine: its steps one after another, like a chain */
     fun runRoutine(ac: ActionContext, r: Routine): ActionResult {
         val steps = r.steps.flatMap { IntentParser.parseChain(it) }
-        LogStore.add(ac.context, "ROUTINE \"${r.name}\" -> ${steps.size} ধাপ: ${steps.joinToString(" | ") { Describe.say(it, ac.bn) }}")
+        LogStore.add(ac.context, "ROUTINE \"${r.name}\" -> ${steps.size} step(s): ${steps.joinToString(" | ") { Describe.say(it, ac.bn) }}")
         if (steps.isEmpty()) return ActionResult(false, if (ac.bn) "রুটিনে কোনো ধাপ নেই" else "The routine has no steps")
         return runSteps(ac, steps, r.name)
     }
@@ -64,7 +64,7 @@ object CommandPipeline {
     /** one step runs directly; several run as a chain */
     private fun runSteps(ac: ActionContext, steps: List<Parsed>, text: String): ActionResult {
         if (steps.size == 1) return runOne(ac, steps[0], text)
-        LogStore.add(ac.context, "CHAIN \"$text\" -> ${steps.size} ধাপ: ${steps.joinToString(" | ") { Describe.say(it, ac.bn) }}")
+        LogStore.add(ac.context, "CHAIN \"$text\" -> ${steps.size} step(s): ${steps.joinToString(" | ") { Describe.say(it, ac.bn) }}")
         return ChainRunner(ac.bn, { p -> runOne(ac, p, p.normalized) }, MainScheduler).start(steps)
     }
 

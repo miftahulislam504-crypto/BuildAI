@@ -32,7 +32,7 @@ object BackgroundLauncher {
             )
             wl.acquire(5000)
         } catch (e: Exception) {
-            LogStore.add(ctx, "স্ক্রিন জাগানো যায়নি: ${e.message}")
+            LogStore.add(ctx, "Could not wake the screen: ${e.message}")
         }
     }
 
@@ -43,10 +43,10 @@ object BackgroundLauncher {
         val anchor = showAnchor(app)
         return try {
             app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            if (anchor == null) LogStore.add(app, "লঞ্চ: ওভারলে পারমিশন নেই, ব্যাকগ্রাউন্ড থেকে খোলা বাধা পেতে পারে")
+            if (anchor == null) LogStore.add(app, "Launch: no overlay permission, opening from the background may be blocked")
             true
         } catch (e: Exception) {
-            LogStore.add(app, "লঞ্চ ব্যর্থ: ${e.javaClass.simpleName}: ${e.message}")
+            LogStore.add(app, "Launch failed: ${e.javaClass.simpleName}: ${e.message}")
             false
         } finally {
             if (anchor != null) main.postDelayed({ removeAnchor(app, anchor) }, 3000)

@@ -96,7 +96,7 @@ object RoutineRunner {
     private fun tell(ctx: Context, bn: Boolean, name: String, text: String) {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "BuildX রুটিন", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, "BuildX routines", NotificationManager.IMPORTANCE_LOW))
         }
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)

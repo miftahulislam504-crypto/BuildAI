@@ -120,7 +120,7 @@ class DatedAlarmReceiver : BroadcastReceiver() {
         fun ring(ctx: Context, id: Int, text: String, late: Boolean) {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.getNotificationChannel(CHANNEL) == null) {
-                val ch = NotificationChannel(CHANNEL, "BuildX অ্যালার্ম", NotificationManager.IMPORTANCE_HIGH)
+                val ch = NotificationChannel(CHANNEL, "BuildX alarms", NotificationManager.IMPORTANCE_HIGH)
                 ch.enableVibration(true)
                 ch.vibrationPattern = longArrayOf(0, 600, 400, 600)
                 ch.setSound(
@@ -138,8 +138,8 @@ class DatedAlarmReceiver : BroadcastReceiver() {
                 Intent(ctx, DatedAlarmActionReceiver::class.java).setAction(act).putExtra(DatedAlarmScheduler.EXTRA_ID, id).putExtra(DatedAlarmScheduler.EXTRA_TEXT, text),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val body = text.ifBlank { "অ্যালার্ম বাজছে" }
-            val title = if (late) "অ্যালার্ম (দেরিতে)" else "অ্যালার্ম"
+            val body = text.ifBlank { "Alarm is ringing" }
+            val title = if (late) "Alarm (late)" else "Alarm"
             val n = Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(title)
@@ -149,8 +149,8 @@ class DatedAlarmReceiver : BroadcastReceiver() {
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setTimeoutAfter(10 * 60_000L)
-                .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_menu_close_clear_cancel), "বন্ধ করো", action(DatedAlarmScheduler.ACTION_STOP, 1)).build())
-                .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_lock_idle_alarm), "৫ মিনিট পরে", action(DatedAlarmScheduler.ACTION_SNOOZE, 2)).build())
+                .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_menu_close_clear_cancel), "Stop", action(DatedAlarmScheduler.ACTION_STOP, 1)).build())
+                .addAction(Notification.Action.Builder(Icon.createWithResource(ctx, android.R.drawable.ic_lock_idle_alarm), "Snooze 5 min", action(DatedAlarmScheduler.ACTION_SNOOZE, 2)).build())
                 .build()
             n.flags = n.flags or Notification.FLAG_INSISTENT // keep ringing, like an alarm clock
             try {
@@ -163,7 +163,7 @@ class DatedAlarmReceiver : BroadcastReceiver() {
     }
 }
 
-/** The "বন্ধ করো" and "৫ মিনিট পরে" buttons on the ringing alarm. */
+/** The Stop and Snooze buttons on the ringing alarm. */
 class DatedAlarmActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getIntExtra(DatedAlarmScheduler.EXTRA_ID, 0)

@@ -47,15 +47,15 @@ object AndroidLlm {
     fun test(ctx: Context, done: (String) -> Unit) {
         val p = prefs(ctx)
         val cfg = LlmConfig.of(true, p.getString(KEY_URL, "") ?: "", p.getString(KEY_TOKEN, "") ?: "")
-            ?: return done("✗ ঠিকানা ঠিক নেই: https:// দিয়ে শুরু হতে হবে")
+            ?: return done("The address is not valid: it must start with https://")
         runIo {
             val said = "ফ্ল্যাশলাইট জ্বালাও"
             val out = HttpLlmBackend(cfg.url, cfg.token).plan(LlmRequest(said, "bn-BD", nowIso()))
             val text = when (out) {
                 is LlmOutcome.Planned ->
-                    "✓ সংযোগ ঠিক আছে। \"$said\" -> " +
+                    "Connection OK. \"$said\" -> " +
                         (out.plan.steps.joinToString(" | ") { it.intent }.ifEmpty { "say: ${out.plan.say}" })
-                is LlmOutcome.Failed -> "✗ ${out.why} ${out.detail}"
+                is LlmOutcome.Failed -> "Failed: ${out.why} ${out.detail}"
             }
             runUi { done(text) }
         }

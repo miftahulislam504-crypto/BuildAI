@@ -23,6 +23,6 @@ object CrashFormat {
         if (all.length <= MAX_CHARS) return all
         val tail = all.substring(all.length - MAX_CHARS)
         val boundary = tail.indexOf("=== ")
-        return if (boundary >= 0) tail.substring(boundary) else "=== (আগের অংশ কাটা)\n$tail"
+        return if (boundary >= 0) tail.substring(boundary) else "=== (earlier part trimmed)\n$tail"
     }
 }

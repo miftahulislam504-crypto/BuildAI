@@ -33,7 +33,7 @@ class BuildXAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
-        LogStore.add(this, "ACCESSIBILITY সংযুক্ত")
+        LogStore.add(this, "ACCESSIBILITY connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -42,7 +42,7 @@ class BuildXAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
-        LogStore.add(this, "ACCESSIBILITY বিচ্ছিন্ন")
+        LogStore.add(this, "ACCESSIBILITY disconnected")
         return super.onUnbind(intent)
     }
 

@@ -118,7 +118,7 @@ object YoutubePlayAction : Action {
         val ctx = ac.context.applicationContext
         return ActionResult(true, ac.t("ইউটিউবে ‘$q’ খুঁজছি", "Looking for “$q” on YouTube"), deferred = Deferred { report ->
             Thread {
-                val id = try { firstVideo(q) } catch (e: Exception) { LogStore.add(ctx, "YOUTUBE খোঁজা ব্যর্থ: ${e.javaClass.simpleName}: ${e.message}"); null }
+                val id = try { firstVideo(q) } catch (e: Exception) { LogStore.add(ctx, "YOUTUBE search failed: ${e.javaClass.simpleName}: ${e.message}"); null }
                 main.post { open(ac, ctx, q, id, report) }
             }.start()
         })

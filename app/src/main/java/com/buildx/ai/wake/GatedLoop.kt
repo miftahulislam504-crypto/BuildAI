@@ -80,13 +80,13 @@ class GatedLoop(private val ctx: Context, private val rec: Recognizer) {
                 val now = System.currentTimeMillis()
                 if (now - lastLog > 120_000L) {
                     lastLog = now
-                    LogStore.add(ctx, "GATE শোনা ${"%.1f".format(gate.speechShare() * 100)}% ফ্রেমে (বাকিটা ঘুমিয়ে), শব্দের মেঝে=${gate.noiseFloor.toInt()}")
+                    LogStore.add(ctx, "GATE listening on ${"%.1f".format(gate.speechShare() * 100)}% of frames (sleeping the rest), noise floor=${gate.noiseFloor.toInt()}")
                 }
             }
         } catch (e: Throwable) {
             main.post { l.onError(Exception("gated loop: ${e.javaClass.simpleName}: ${e.message}")) }
         } finally {
-            LogStore.add(ctx, "GATE বন্ধ: ${"%.1f".format(gate.speechShare() * 100)}% ফ্রেমে শোনা হয়েছিল")
+            LogStore.add(ctx, "GATE stopped: listened on ${"%.1f".format(gate.speechShare() * 100)}% of frames")
         }
     }
 

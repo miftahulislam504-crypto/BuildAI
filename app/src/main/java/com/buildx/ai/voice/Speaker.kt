@@ -66,7 +66,7 @@ class Speaker(private val ctx: Context) {
         onReady: () -> Unit
     ) {
         if (status != TextToSpeech.SUCCESS || t == null) {
-            LogStore.add(ctx, "TTS[$name]: init ব্যর্থ (status=$status)")
+            LogStore.add(ctx, "TTS[$name]: init failed (status=$status)")
             try {
                 t?.shutdown()
             } catch (_: Exception) {
@@ -82,7 +82,7 @@ class Speaker(private val ctx: Context) {
             if (avail >= TextToSpeech.LANG_AVAILABLE) {
                 t.setLanguage(locale)
                 attach(t)
-                LogStore.add(ctx, "TTS: ব্যবহার হচ্ছে engine=$name lang=$tag")
+                LogStore.add(ctx, "TTS: using engine=$name lang=$tag")
                 finishInit(true, onReady)
                 return
             }
@@ -147,7 +147,7 @@ class Speaker(private val ctx: Context) {
                 ?: all.filter { !it.isNetworkConnectionRequired }.maxByOrNull { it.quality }
             if (pick != null && pick.name != t.voice?.name) {
                 t.voice = pick
-                LogStore.add(ctx, "TTS ভয়েস: ${pick.name} (মান ${pick.quality})")
+                LogStore.add(ctx, "TTS voice: ${pick.name} (quality ${pick.quality})")
             }
         } catch (e: Exception) {
             LogStore.add(ctx, "TTS tuning: ${e.javaClass.simpleName}: ${e.message}")
@@ -182,7 +182,7 @@ class Speaker(private val ctx: Context) {
         }
         val t = tts
         if (t == null || !ready) {
-            LogStore.add(ctx, "TTS নীরব (ভয়েজ/ভাষা নেই): $text")
+            LogStore.add(ctx, "TTS silent (no voice or language): $text")
             main.post { onDone() }
             return
         }
@@ -200,7 +200,7 @@ class Speaker(private val ctx: Context) {
             if (i == parts.lastIndex) synchronized(callbacks) { callbacks[id] = onDone } // only the end of the last sentence counts
             val r = t.speak(part, if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, id)
             if (r != TextToSpeech.SUCCESS) {
-                LogStore.add(ctx, "TTS speak() ব্যর্থ ($r)")
+                LogStore.add(ctx, "TTS speak() failed ($r)")
                 if (i == parts.lastIndex) fire(id)
             }
         }

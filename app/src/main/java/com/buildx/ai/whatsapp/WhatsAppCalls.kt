@@ -47,7 +47,7 @@ class WhatsAppCallPlacer(private val ctx: Context, private val bn: Boolean, priv
             }
             return PlaceOutcome(false, t("WhatsApp খোলা যায়নি", "Couldn't open WhatsApp"))
         }
-        LogStore.add(ctx, "WHATSAPP call: $number-এর জন্য কল-সারি পাইনি (installed=$installedAny)")
+        LogStore.add(ctx, "WHATSAPP call: no call row found for $number (installed=$installedAny)")
         return PlaceOutcome(
             false,
             if (!installedAny) t("WhatsApp ইনস্টল করা নেই", "WhatsApp is not installed")

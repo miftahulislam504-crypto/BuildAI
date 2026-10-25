@@ -100,7 +100,7 @@ class PhotoActivity : Activity(), TextureView.SurfaceTextureListener {
         try {
             openCamera(st)
         } catch (e: Exception) {
-            LogStore.add(this, "PHOTO খোলা যায়নি: ${e.javaClass.simpleName}: ${e.message}")
+            LogStore.add(this, "PHOTO could not be opened: ${e.javaClass.simpleName}: ${e.message}")
             end(false, t("ক্যামেরা খোলা যায়নি", "Couldn't open the camera"))
         }
     }
@@ -253,11 +253,11 @@ class PhotoActivity : Activity(), TextureView.SurfaceTextureListener {
         } else {
             contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
             contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
-            LogStore.add(this, "PHOTO সেভ: Pictures/BuildX/$name (${bytes.size / 1024} KB)")
+            LogStore.add(this, "PHOTO saved: Pictures/BuildX/$name (${bytes.size / 1024} KB)")
             name
         }
     } catch (e: Exception) {
-        LogStore.add(this, "PHOTO সেভ ব্যর্থ: ${e.message}")
+        LogStore.add(this, "PHOTO save failed: ${e.message}")
         null
     }
 

@@ -46,7 +46,7 @@ class WakePhrase private constructor(val words: List<String>) {
 
     sealed class Parse {
         data class Ok(val phrase: WakePhrase) : Parse()
-        /** [reason] is a Bangla sentence for the person */
+        /** [reason] is a short English sentence for the person */
         data class Bad(val reason: String) : Parse()
     }
 
@@ -69,15 +69,15 @@ class WakePhrase private constructor(val words: List<String>) {
             val t = raw.orEmpty().trim().lowercase().replace(Regex("\\s+"), " ")
             if (t.isEmpty()) return Parse.Ok(DEFAULT)
             if (!t.all { it in 'a'..'z' || it == '\'' || it == ' ' }) {
-                return Parse.Bad("শুধু ইংরেজি অক্ষরে লিখুন, যেমন যেভাবে শোনায়: hey jarvis")
+                return Parse.Bad("Use English letters only, spelled the way it sounds, for example: hey jarvis")
             }
             val w = t.split(' ')
-            if (w.size < MIN_WORDS) return Parse.Bad("কমপক্ষে ২টা শব্দ দিন (১ শব্দে ভুল ট্রিগার বেশি হয়)")
-            if (w.size > MAX_WORDS) return Parse.Bad("সর্বোচ্চ $MAX_WORDS শব্দ দিন")
-            if (w.sumOf { it.length } < MIN_LETTERS) return Parse.Bad("খুব ছোট, ভুল ট্রিগার হবে। অন্তত $MIN_LETTERS অক্ষর হতে হবে")
+            if (w.size < MIN_WORDS) return Parse.Bad("Use at least 2 words (a single word triggers falsely too often)")
+            if (w.size > MAX_WORDS) return Parse.Bad("Use at most $MAX_WORDS words")
+            if (w.sumOf { it.length } < MIN_LETTERS) return Parse.Bad("Too short, it would trigger falsely. It needs at least $MIN_LETTERS letters")
             if (vocabulary != null) {
                 val unknown = w.filter { it !in vocabulary }
-                if (unknown.isNotEmpty()) return Parse.Bad("মডেল এই শব্দ চেনে না: ${unknown.joinToString(", ")}। চেনা ইংরেজি শব্দ ব্যবহার করুন")
+                if (unknown.isNotEmpty()) return Parse.Bad("The model does not know these words: ${unknown.joinToString(", ")}. Use common English words")
             }
             return Parse.Ok(WakePhrase(w))
         }

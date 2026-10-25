@@ -45,7 +45,7 @@ class BuildXSession(ctx: Context) : VoiceInteractionSession(ctx) {
         }
         logView = log
         val close = Button(c).apply {
-            text = "বন্ধ"
+            text = "Close"
             setOnClickListener { hide() }
         }
         val card = LinearLayout(c).apply {

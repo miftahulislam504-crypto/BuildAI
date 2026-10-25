@@ -36,13 +36,13 @@ class BuildXVoiceInteractionService : VoiceInteractionService() {
     override fun onReady() {
         super.onReady()
         instance = this
-        LogStore.add(this, "ASSISTANT প্রস্তুত (BuildX এখন ডিফল্ট অ্যাসিস্ট্যান্ট)")
+        LogStore.add(this, "ASSISTANT ready (BuildX is now the default assistant)")
         autoStartListening()
     }
 
     override fun onShutdown() {
         instance = null
-        LogStore.add(this, "ASSISTANT বন্ধ")
+        LogStore.add(this, "ASSISTANT stopped")
         super.onShutdown()
     }
 
@@ -51,20 +51,20 @@ class BuildXVoiceInteractionService : VoiceInteractionService() {
         val prefs = getSharedPreferences("buildx", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("assistAutoStart", true) || WakeService.running) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            LogStore.add(this, "ASSISTANT অটো-স্টার্ট: মাইক পারমিশন নেই")
+            LogStore.add(this, "ASSISTANT auto-start: no microphone permission")
             return
         }
         if (!ModelManager.isReady(this)) {
-            LogStore.add(this, "ASSISTANT অটো-স্টার্ট: wake মডেল নামানো নেই")
+            LogStore.add(this, "ASSISTANT auto-start: wake model is not downloaded")
             return
         }
         try {
             startForegroundService(Intent(this, WakeService::class.java))
-            LogStore.add(this, "ASSISTANT অটো-স্টার্ট: শোনার সার্ভিস চালু করতে বলেছি")
+            LogStore.add(this, "ASSISTANT auto-start: asked the listening service to start")
         } catch (e: Exception) {
-            LogStore.add(this, "ASSISTANT অটো-স্টার্ট ব্যর্থ: ${e.javaClass.simpleName}: ${e.message}")
+            LogStore.add(this, "ASSISTANT auto-start failed: ${e.javaClass.simpleName}: ${e.message}")
         } catch (e: Throwable) {
-            LogStore.add(this, "ASSISTANT অটো-স্টার্ট ব্যর্থ: ${e.javaClass.simpleName}")
+            LogStore.add(this, "ASSISTANT auto-start failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -73,7 +73,7 @@ class BuildXVoiceInteractionService : VoiceInteractionService() {
         showSession(Bundle().apply { putBoolean("fromWake", fromWake) }, 0)
         true
     } catch (e: Exception) {
-        LogStore.add(this, "ASSISTANT পপআপ দেখানো যায়নি: ${e.javaClass.simpleName}: ${e.message}")
+        LogStore.add(this, "ASSISTANT could not show the popup: ${e.javaClass.simpleName}: ${e.message}")
         false
     }
 }

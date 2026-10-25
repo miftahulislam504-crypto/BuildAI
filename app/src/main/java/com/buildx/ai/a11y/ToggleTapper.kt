@@ -145,7 +145,7 @@ object ToggleTapper {
     /** failure aid: the kind and own label of the switches on screen, nothing else */
     private fun dump(svc: BuildXAccessibilityService, root: AccessibilityNodeInfo?) {
         if (root == null) {
-            LogStore.add(svc, "TOGGLE-DUMP: কোনো স্ক্রিন পাওয়া যায়নি (rootInActiveWindow null)")
+            LogStore.add(svc, "TOGGLE-DUMP: no screen found (rootInActiveWindow null)")
             return
         }
         val queue = ArrayDeque<AccessibilityNodeInfo>()
@@ -162,6 +162,6 @@ object ToggleTapper {
             }
             for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
         }
-        if (shown == 0) LogStore.add(svc, "TOGGLE-DUMP: স্ক্রিনে কোনো সুইচ-ধরনের উপাদান পাইনি ($seen টি উপাদান দেখেছি)")
+        if (shown == 0) LogStore.add(svc, "TOGGLE-DUMP: no switch-like elements on screen (saw $seen elements)")
     }
 }

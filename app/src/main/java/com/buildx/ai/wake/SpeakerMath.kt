@@ -4,9 +4,9 @@ import kotlin.math.sqrt
 
 /** How strictly a voice must match the enrolled one. Smaller distance = more alike. */
 enum class VoiceStrictness(val label: String, val offset: Double) {
-    STRICT("কড়া (অন্য কেউ সহজে পারবে না, নিজের কণ্ঠও মাঝে মাঝে ফিরে যেতে পারে)", -0.07),
-    NORMAL("মাঝারি", 0.0),
-    LOOSE("ঢিলা (নিজের কণ্ঠ প্রায় সবসময় ধরে, অন্যের ঢোকার সুযোগ বেশি)", 0.07);
+    STRICT("Strict (others cannot wake it easily, your own voice may sometimes be turned away)", -0.07),
+    NORMAL("Medium", 0.0),
+    LOOSE("Loose (almost always accepts your voice, easier for others to get in)", 0.07);
 
     companion object {
         fun from(i: Int): VoiceStrictness = values().getOrElse(i) { NORMAL }

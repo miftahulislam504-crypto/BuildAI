@@ -4,9 +4,9 @@ import org.json.JSONObject
 
 /** Which recognizer hears the person's command. */
 enum class SttMode(val key: String, val label: String) {
-    SYSTEM("system", "ফোনের নিজস্ব (ডিফল্ট)"),
-    WHISPER("whisper", "Whisper (সার্ভার, বাংলায় ভালো)"),
-    AUTO("auto", "অটো (বাংলায় Whisper, ইংরেজিতে ফোনের)");
+    SYSTEM("system", "Phone's own (default)"),
+    WHISPER("whisper", "Whisper (server, better for Bangla)"),
+    AUTO("auto", "Auto (Whisper for Bangla, phone's own for English)");
 
     companion object {
         fun from(key: String?): SttMode = values().firstOrNull { it.key == key } ?: SYSTEM

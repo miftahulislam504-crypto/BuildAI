@@ -28,7 +28,7 @@ class ReminderReceiver : BroadcastReceiver() {
         fun notifyNow(ctx: Context, id: Int, text: String, late: Boolean) {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.getNotificationChannel(CHANNEL) == null) {
-                val ch = NotificationChannel(CHANNEL, "BuildX রিমাইন্ডার", NotificationManager.IMPORTANCE_HIGH)
+                val ch = NotificationChannel(CHANNEL, "BuildX reminders", NotificationManager.IMPORTANCE_HIGH)
                 ch.enableVibration(true)
                 ch.setSound(
                     RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
@@ -40,8 +40,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val title = if (late) "রিমাইন্ডার (দেরিতে)" else "রিমাইন্ডার"
-            val body = text.ifBlank { "মনে করিয়ে দেওয়ার সময় হয়েছে" }
+            val title = if (late) "Reminder (late)" else "Reminder"
+            val body = text.ifBlank { "It is time for your reminder" }
             val n = Notification.Builder(ctx, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle(title)

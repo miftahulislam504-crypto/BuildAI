@@ -40,7 +40,7 @@ class VoskWakeEngine(
         try {
             SpeakerModel(it)
         } catch (e: Exception) {
-            LogStore.add(ctx, "ERROR কণ্ঠ-মডেল: ${e.javaClass.simpleName}: ${e.message}")
+            LogStore.add(ctx, "ERROR voice model: ${e.javaClass.simpleName}: ${e.message}")
             null
         }
     }
@@ -87,10 +87,10 @@ class VoskWakeEngine(
                 val g = GatedLoop(ctx, rec)
                 if (g.start(this)) {
                     gated = g
-                    LogStore.add(ctx, "LISTENING: কম-ব্যাটারি মোড (কণ্ঠ ধরলে তবেই বুঝবে)")
+                    LogStore.add(ctx, "LISTENING: low-power mode (recognizes only when a voice is detected)")
                     return
                 }
-                LogStore.add(ctx, "কম-ব্যাটারি মোড শুরু হয়নি, সাধারণ শোনায় ফিরলাম")
+                LogStore.add(ctx, "Low-power mode did not start, falling back to normal listening")
             }
             val s = SpeechService(rec, 16000.0f)
             s.startListening(this)
@@ -140,7 +140,7 @@ class VoskWakeEngine(
 
         enrollment?.let { e ->
             if (phrase.matches(t) && spk != null) handleEnrollSample(e, spk)
-            else if (phrase.matches(t)) LogStore.add(ctx, "কণ্ঠ রেজিস্টার: কণ্ঠের তথ্য পাইনি (খুব ছোট বা আস্তে?), আবার বলুন")
+            else if (phrase.matches(t)) LogStore.add(ctx, "Voice enrollment: no voice data found (too short or too quiet?), say it again")
             return
         }
 
@@ -150,7 +150,7 @@ class VoskWakeEngine(
                 val d = spk?.let { SpeakerMath.cosineDistance(lock.print, it) }
                 val frames = try { JSONObject(hypothesis ?: "{}").optInt("spk_frames", -1) } catch (_: Exception) { -1 }
                 val ok = d != null && d <= lock.maxDistance
-                LogStore.add(ctx, "WAKE-VOICE দূরত্ব=${d?.let { "%.2f".format(it) } ?: "?"} সীমা=${"%.2f".format(lock.maxDistance)} ফ্রেম=$frames -> ${if (ok) "আমার কণ্ঠ" else "রিজেক্ট"}")
+                LogStore.add(ctx, "WAKE-VOICE distance=${d?.let { "%.2f".format(it) } ?: "?"} limit=${"%.2f".format(lock.maxDistance)} frames=$frames -> ${if (ok) "my voice" else "rejected"}")
                 if (!ok) return
             }
             fire("final \"$t\"")

@@ -61,15 +61,15 @@ object ModelManager {
                 val root = File(ctx.filesDir, "models")
                 File(root, name).deleteRecursively()
                 root.mkdirs()
-                LogStore.add(ctx, "মডেল: আনজিপ হচ্ছে...")
+                LogStore.add(ctx, "Model: unzipping...")
                 unzip(zip, root)
                 zip.delete()
 
                 File(File(root, name), ".ok").writeText("ok")
-                LogStore.add(ctx, "মডেল: প্রস্তুত ($name)")
+                LogStore.add(ctx, "Model: ready ($name)")
                 ok = true
             } catch (e: Exception) {
-                LogStore.add(ctx, "মডেল ERROR: ${e.javaClass.simpleName}: ${e.message}")
+                LogStore.add(ctx, "Model ERROR: ${e.javaClass.simpleName}: ${e.message}")
             }
             downloading = false
             Handler(Looper.getMainLooper()).post { onDone(ok) }
@@ -77,7 +77,7 @@ object ModelManager {
     }
 
     private fun downloadTo(ctx: Context, dest: File, url: String) {
-        LogStore.add(ctx, "মডেল: ডাউনলোড শুরু ($url)")
+        LogStore.add(ctx, "Model: download started ($url)")
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 15000
         conn.readTimeout = 30000
@@ -97,14 +97,14 @@ object ModelManager {
                         if (total > 0) {
                             val pct = (done * 100 / total).toInt()
                             if (pct >= nextLog) {
-                                LogStore.add(ctx, "মডেল: $pct%")
+                                LogStore.add(ctx, "Model: $pct%")
                                 nextLog = pct - pct % 10 + 10
                             }
                         }
                     }
                 }
             }
-            LogStore.add(ctx, "মডেল: ডাউনলোড শেষ (${done / 1024 / 1024} MB)")
+            LogStore.add(ctx, "Model: download finished (${done / 1024 / 1024} MB)")
         } finally {
             conn.disconnect()
         }
