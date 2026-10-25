@@ -88,18 +88,28 @@ class MainScreenDeviceTest {
         return out
     }
 
+    // The tab bar's labels sit inside a clickable column; the page title above the pages is not clickable.
+    // (This does not depend on the screen density, unlike comparing text sizes.)
+    private fun tabLabels(root: View): List<TextView> =
+        texts(root).filter { (it.parent as? View)?.hasOnClickListeners() == true }
+
     @Test fun fourTabsOpenAndTheTitleFollows() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            for (name in listOf("সেটআপ", "সেটিংস", "পরীক্ষা", "হোম")) {
+            // tab label -> the title shown above the page (home's title is the app name)
+            val tabs = listOf(
+                "Setup" to "Setup",
+                "Settings" to "Settings",
+                "Test" to "Tests and log",
+                "Home" to "BuildX AI"
+            )
+            for ((name, expected) in tabs) {
                 scenario.onActivity { act ->
-                    val root = act.window.decorView
-                    val tab = texts(root).first { it.text.toString() == name && it.textSize < 40f }
-                    (tab.parent as View).performClick()
+                    val tab = tabLabels(act.window.decorView).firstOrNull { it.text.toString() == name }
+                    assertNotNull("tab '$name' not found in the tab bar", tab)
+                    (tab!!.parent as View).performClick()
                 }
                 scenario.onActivity { act ->
                     val all = texts(act.window.decorView).map { it.text.toString() }
-                    // the tab's own label and the title above show the name (home's title is the app name)
-                    val expected = if (name == "পরীক্ষা") "পরীক্ষা ও লগ" else if (name == "হোম") "BuildX AI" else name
                     assertTrue("title '$expected' missing after opening $name", all.contains(expected))
                 }
             }
@@ -110,8 +120,14 @@ class MainScreenDeviceTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { act ->
                 val all = texts(act.window.decorView).map { it.text.toString() }
-                assertTrue(all.any { it.contains("শোনা শুরু") || it.contains("শোনা বন্ধ") })
-                assertTrue(all.any { it.contains(WakePhrase.fromPref("").display) })
+                assertTrue(
+                    "the listen toggle (Start listening / Stop listening) is missing",
+                    all.any { it.equals("Start listening", ignoreCase = true) || it.equals("Stop listening", ignoreCase = true) }
+                )
+                assertTrue(
+                    "the wake phrase is not shown on home",
+                    all.any { it.contains(WakePhrase.fromPref("").display) }
+                )
             }
         }
     }
