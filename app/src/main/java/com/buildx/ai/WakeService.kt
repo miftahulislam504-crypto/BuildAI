@@ -97,7 +97,7 @@ class WakeService : Service() {
         if (prefs.getBoolean("svcActive", false)) {
             val kills = prefs.getInt("svcKills", 0) + 1
             prefs.edit().putInt("svcKills", kills).putBoolean("svcDied", true).apply()
-            LogStore.add(this, "সার্ভিস গতবার নিজে বন্ধ হয়নি, অস্বাভাবিকভাবে বন্ধ হয়েছিল (এ পর্যন্ত $kills বার). ফোনের ব্যাকগ্রাউন্ড গাইড দেখুন")
+            LogStore.add(this, "The service stopped abnormally last time (so far $kills times). See the phone's keep-alive guide")
         } else {
             prefs.edit().putBoolean("svcDied", false).apply()
         }
@@ -110,7 +110,7 @@ class WakeService : Service() {
         )
 
         if (!ModelManager.isReady(this)) {
-            LogStore.add(this, "ERROR: wake word মডেল নামানো হয়নি")
+            LogStore.add(this, "ERROR: wake word model is not downloaded")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -134,7 +134,7 @@ class WakeService : Service() {
     private fun loadEngine() {
         val appCtx = applicationContext
         val path = ModelManager.modelDir(appCtx).absolutePath
-        LogStore.add(this, "মডেল লোড হচ্ছে...")
+        LogStore.add(this, "Loading model...")
         Thread {
             try {
                 val t0 = SystemClock.elapsedRealtime()
@@ -154,13 +154,13 @@ class WakeService : Service() {
                     } else {
                         engine = eng
                         eng.start()
-                        LogStore.add(this, "LISTENING: Vosk চালু (মডেল লোড ${ms}ms)")
+                        LogStore.add(this, "LISTENING: Vosk running (model loaded in ${ms}ms)")
                     }
                 }
             } catch (e: Throwable) {
                 // Throwable on purpose: a missing native library is an Error, not an Exception.
                 main.post {
-                    LogStore.add(this, "ERROR মডেল লোড: ${e.javaClass.simpleName}: ${e.message}")
+                    LogStore.add(this, "ERROR loading model: ${e.javaClass.simpleName}: ${e.message}")
                     stopSelf()
                 }
             }
@@ -208,11 +208,11 @@ class WakeService : Service() {
         if (!running) return
         conversation = null
         if (callActive) {
-            LogStore.add(this, "LISTENING: কল চলছে, কল শেষে চালু হবে")
+            LogStore.add(this, "LISTENING: a call is in progress, will resume when it ends")
             return
         }
         engine?.start()
-        LogStore.add(this, "LISTENING: আবার চালু")
+        LogStore.add(this, "LISTENING: resumed")
     }
 
     // ---------- "only my voice" ----------
@@ -220,14 +220,14 @@ class WakeService : Service() {
     /** apply a changed on/off switch or strictness without restarting the service */
     fun reloadVoiceLock() {
         (engine as? VoskWakeEngine)?.voice = VoiceLockStore.load(applicationContext)
-        LogStore.add(this, "কণ্ঠ-লক: ${if (VoiceLockStore.load(applicationContext) != null) "চালু" else "বন্ধ"}")
+        LogStore.add(this, "Voice lock: ${if (VoiceLockStore.load(applicationContext) != null) "on" else "off"}")
     }
 
     /** the person says "Hey Build" [needed] times; the average of their voice-prints is saved */
     fun startEnroll(needed: Int, progress: (Int, Double?) -> Unit, done: (Boolean, String) -> Unit) {
         val eng = engine as? VoskWakeEngine
-        if (eng == null) return done(false, "আগে শোনা চালু করুন (সার্ভিস চলতে ও মডেল লোড হতে হবে)")
-        if (!eng.canHearVoices) return done(false, "কণ্ঠ-মডেল নামানো নেই বা লোড হয়নি। মডেল নামিয়ে শোনা বন্ধ করে আবার চালু করুন")
+        if (eng == null) return done(false, "Start listening first (the service must be running with the model loaded)")
+        if (!eng.canHearVoices) return done(false, "The voice model is not downloaded or not loaded. Download it, then stop and restart listening")
         var active = true
         val e = VoskWakeEngine.Enrollment(needed, { n, d -> main.post { progress(n, d) } }) { mean, samples, msg ->
             main.post {
@@ -236,7 +236,7 @@ class WakeService : Service() {
                     val base = SpeakerMath.calibratedBase(samples, mean)
                     VoiceLockStore.save(this, mean, base)
                     eng.voice = VoiceLockStore.load(this)
-                    done(true, "আপনার কণ্ঠ রেজিস্টার হয়েছে (সীমা ${"%.2f".format(base)})। এখন থেকে শুধু আপনার কণ্ঠে সাড়া দেবে")
+                    done(true, "Your voice is enrolled (limit ${"%.2f".format(base)}). From now on it responds to your voice only")
                 } else {
                     done(false, msg)
                 }
@@ -247,7 +247,7 @@ class WakeService : Service() {
             if (active) {
                 eng.cancelEnroll()
                 active = false
-                done(false, "সময় শেষ, রেজিস্টার হয়নি। শান্ত জায়গায় আবার চেষ্টা করুন")
+                done(false, "Time is up, enrollment did not finish. Try again in a quiet place")
             }
         }, 90_000)
     }
@@ -259,9 +259,9 @@ class WakeService : Service() {
         val w = CallWatcher(this) { state -> onCallState(state) }
         if (w.start()) {
             callWatcher = w
-            LogStore.add(this, "CALL WATCH চালু")
+            LogStore.add(this, "CALL WATCH on")
         } else {
-            LogStore.add(this, "CALL WATCH বন্ধ (ফোনের অবস্থা দেখার পারমিশন নেই)")
+            LogStore.add(this, "CALL WATCH off (no permission to read phone state)")
         }
         CallTracker.shared.announce = { sentence -> main.post { speakThenResume(sentence) } }
     }
@@ -270,11 +270,11 @@ class WakeService : Service() {
         if (!running) return
         val summary = CallTracker.shared.onState(state, System.currentTimeMillis())
         if (state == CallTracker.IDLE) {
-            if (callActive) LogStore.add(this, "CALL শেষ")
+            if (callActive) LogStore.add(this, "CALL ended")
             callActive = false
             if (summary != null) speakThenResume(summary) else restartEngineIfIdle()
         } else {
-            if (!callActive) LogStore.add(this, "CALL ${if (state == CallTracker.RINGING) "ইনকামিং" else "চলছে/ডায়াল"}")
+            if (!callActive) LogStore.add(this, "CALL ${if (state == CallTracker.RINGING) "incoming" else "active or dialing"}")
             callActive = true
             if (state == CallTracker.RINGING) {
                 conversation?.cancel()
@@ -339,7 +339,7 @@ class WakeService : Service() {
     private fun buildNotification(): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "BuildX শোনা", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_ID, "BuildX listening", NotificationManager.IMPORTANCE_LOW)
         )
         val stopIntent = PendingIntent.getService(
             this,
@@ -348,11 +348,11 @@ class WakeService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("BuildX AI শুনছে")
-            .setContentText("\"${WakePhrase.fromPref(getSharedPreferences("buildx", MODE_PRIVATE).getString("wakePhrase", "")).let { if (it.isDefault) "Hey BuildX" else it.display }}\" বলুন")
+            .setContentTitle("BuildX AI is listening")
+            .setContentText("Say \"${WakePhrase.fromPref(getSharedPreferences("buildx", MODE_PRIVATE).getString("wakePhrase", "")).let { if (it.isDefault) "Hey BuildX" else it.display }}\"")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(0, "বন্ধ করুন", stopIntent).build())
+            .addAction(Notification.Action.Builder(0, "Stop", stopIntent).build())
             .build()
     }
 

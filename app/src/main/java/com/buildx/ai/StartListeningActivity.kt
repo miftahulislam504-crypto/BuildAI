@@ -19,7 +19,7 @@ class StartListeningActivity : Activity() {
         if (hasModel && hasMic) {
             startForegroundService(Intent(this, WakeService::class.java))
         } else {
-            LogStore.add(this, "টাইল থেকে শুরু হয়নি: অ্যাপ খুলে মডেল নামান ও মাইক পারমিশন দিন")
+            LogStore.add(this, "Could not start from the tile: open the app, download the model and allow the microphone")
             startActivity(Intent(this, MainActivity::class.java))
         }
         finish()

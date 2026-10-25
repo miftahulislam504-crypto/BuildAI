@@ -61,7 +61,7 @@ class SttRunner(private val ctx: Context) {
     private var onDone: ((String?) -> Unit)? = null
 
     private val watchdog = Runnable {
-        LogStore.add(ctx, "STT: টাইমআউট (watchdog ১৫ সেকেন্ড)")
+        LogStore.add(ctx, "STT: timed out (15 second watchdog)")
         finish(null)
     }
 
@@ -85,7 +85,7 @@ class SttRunner(private val ctx: Context) {
                     is Transcript.Text -> finish(t.text)
                     is Transcript.Silence -> finish(null)
                     is Transcript.Failed -> {
-                        LogStore.add(ctx, "STT[whisper] ব্যর্থ (${t.why}), ফোনের রিকগনাইজারে ফিরলাম")
+                        LogStore.add(ctx, "STT[whisper] failed (${t.why}), falling back to the phone's recognizer")
                         if (!done) startSystem(lang)
                     }
                 }
@@ -97,7 +97,7 @@ class SttRunner(private val ctx: Context) {
 
     private fun startSystem(lang: String) {
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-            LogStore.add(ctx, "STT: রিকগনিশন সার্ভিস পাওয়া যায়নি")
+            LogStore.add(ctx, "STT: recognition service not found")
             finish(null)
             return
         }
@@ -108,7 +108,7 @@ class SttRunner(private val ctx: Context) {
 
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                LogStore.add(ctx, "STT: বলুন ($lang)")
+                LogStore.add(ctx, "STT: speak now ($lang)")
             }
 
             override fun onBeginningOfSpeech() {}

@@ -110,6 +110,7 @@ class MainActivity : Activity() {
     private var currentTab = 0
     private val statusRows = ArrayList<Ui.StatusRow>()
     private lateinit var homePill: TextView
+    private lateinit var homeOrb: Ui.Orb
     private lateinit var homeToggle: Button
     private lateinit var homeHint: TextView
     private lateinit var homeReady: TextView
@@ -144,8 +145,11 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this)
         for (pg in pages) frame.addView(pg, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        headerTitle = ui.label("BuildX AI", 22f, bold = true).apply { setPadding(ui.dp(20), ui.dp(14), ui.dp(20), ui.dp(6)) }
-        tabBar = Ui.TabBar(ui, listOf("🏠" to "হোম", "🛠" to "সেটআপ", "⚙" to "সেটিংস", "🧪" to "পরীক্ষা")) { showTab(it) }
+        headerTitle = ui.label("BuildX AI", 28f, bold = true).apply {
+            letterSpacing = -0.02f
+            setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(12))
+        }
+        tabBar = Ui.TabBar(ui, listOf("Home", "Setup", "Settings", "Test")) { showTab(it) }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -181,7 +185,7 @@ class MainActivity : Activity() {
         currentTab = i.coerceIn(0, pages.size - 1)
         for ((k, pg) in pages.withIndex()) pg.visibility = if (k == currentTab) View.VISIBLE else View.GONE
         tabBar.select(currentTab)
-        headerTitle.text = listOf("BuildX AI", "সেটআপ", "সেটিংস", "পরীক্ষা ও লগ")[currentTab]
+        headerTitle.text = listOf("BuildX AI", "Setup", "Settings", "Tests and log")[currentTab]
         if (currentTab == 3) logView.text = LogStore.read(this)
     }
 
@@ -191,46 +195,50 @@ class MainActivity : Activity() {
         val (sv, col) = ui.page()
 
         val hero = ui.card()
-        homePill = ui.pill("বন্ধ", Ui.Kind.WARN)
-        hero.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(ui.label("শোনার অবস্থা", 16f, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(homePill)
-        })
-        homeHint = ui.hint("").apply { setPadding(0, ui.dp(4), 0, ui.dp(8)) }
+        homeOrb = ui.Orb()
+        hero.addView(homeOrb.view)
+        homePill = ui.pill("Idle", Ui.Kind.INFO).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+        }
+        hero.addView(homePill)
+        homeHint = ui.hint("").apply {
+            gravity = Gravity.CENTER
+            setPadding(0, ui.dp(12), 0, ui.dp(16))
+        }
         hero.addView(homeHint)
-        homeToggle = ui.primary("▶  শোনা শুরু করুন") { toggleListening() }
+        homeToggle = ui.primary("Start listening") { toggleListening() }
         hero.addView(homeToggle)
-        hero.addView(ui.pair(ui.tonal("🎤  কথা বলুন") { talkNow() }, ui.quiet("🔊  কণ্ঠ শুনুন") { testTts() }))
+        hero.addView(ui.pair(ui.tonal("Speak") { talkNow() }, ui.quiet("Play sample") { testTts() }))
         col.addView(hero)
 
-        val cmd = ui.card("লিখে কমান্ড দিন", "যেমন: এখন কয়টা বাজে, রহিমকে কল করো")
-        cmdInput = ui.input("কমান্ড লিখুন…").apply {
+        val cmd = ui.card("Type a command", "Runs through the same pipeline as voice, in the language chosen in Settings")
+        cmdInput = ui.input("Type a command").apply {
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, _, _ -> runTextCommand(); true }
             setSingleLine(true)
         }
         cmd.addView(cmdInput)
-        cmd.addView(ui.primary("চালাও") { runTextCommand() })
+        cmd.addView(ui.primary("Run") { runTextCommand() })
         col.addView(cmd)
 
-        val ready = ui.card("প্রস্তুতি")
+        val ready = ui.card("Readiness")
         homeReady = ui.statusText()
         ready.addView(homeReady)
-        ready.addView(ui.tonal("সেটআপে যান") { showTab(1) })
+        ready.addView(ui.tonal("Open setup") { showTab(1) })
         col.addView(ready)
 
-        val rec = ui.card("সাম্প্রতিক")
+        val rec = ui.card("Recent activity")
         homeLog = TextView(this).apply {
             typeface = Typeface.MONOSPACE
             textSize = 11.5f
             setTextColor(ui.c(R.color.bx_log_text))
             background = ui.rounded(ui.c(R.color.bx_log_bg), 12)
-            setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
+            setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12))
         }
         rec.addView(homeLog)
-        rec.addView(ui.quiet("পুরো লগ দেখুন") { showTab(3) })
+        rec.addView(ui.quiet("View full log") { showTab(3) })
         col.addView(rec)
         return sv
     }
@@ -247,16 +255,17 @@ class MainActivity : Activity() {
 
     private fun refreshHome() {
         val on = WakeService.running
-        ui.setPill(homePill, if (on) "শুনছে" else "বন্ধ", if (on) Ui.Kind.OK else Ui.Kind.WARN)
-        homeToggle.text = if (on) "■  শোনা বন্ধ করুন" else "▶  শোনা শুরু করুন"
+        homeOrb.set(on)
+        ui.setPill(homePill, if (on) "Listening" else "Idle", if (on) Ui.Kind.OK else Ui.Kind.INFO)
+        homeToggle.text = if (on) "Stop listening" else "Start listening"
         val phrase = WakePhrase.fromPref(prefs.getString("wakePhrase", ""))
-        homeHint.text = if (on) "\"${phrase.display}\" বলে ডাকুন" else "চালু করলে \"${phrase.display}\" বলে ডাকা যাবে"
+        homeHint.text = if (on) "Say \"${phrase.display}\" to wake the assistant" else "Start listening to wake the assistant with \"${phrase.display}\""
         val missing = statusRows.filter { it.isRequired && !it.ok }.map { it.label }
-        homeReady.text = if (missing.isEmpty()) "✓ জরুরি সবকিছু প্রস্তুত" else "বাকি আছে: ${missing.joinToString(", ")}"
+        homeReady.text = if (missing.isEmpty()) "Everything required is ready" else "Still needed: ${missing.joinToString(", ")}"
     }
 
     private fun lastLines(all: String): String =
-        all.takeLast(3000).trimEnd().lines().takeLast(8).joinToString("\n").ifBlank { "এখনো কিছু হয়নি" }
+        all.takeLast(3000).trimEnd().lines().takeLast(8).joinToString("\n").ifBlank { "Nothing yet" }
 
     // ---------- tab 2: setup (permissions and system switches) ----------
 
@@ -270,82 +279,82 @@ class MainActivity : Activity() {
         val (sv, col) = ui.page()
         fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
-        val must = ui.card("জরুরি", "এগুলো ছাড়া \"হে বিল্ড\" শোনা চলবে না")
-        addRow(must, "মাইক", true, { ensurePerms { refreshPermStatus() } }) { has(Manifest.permission.RECORD_AUDIO) }
-        addRow(must, "নোটিফিকেশন", true, { ensurePerms { refreshPermStatus() } }) {
+        val must = ui.card("Required", "The wake word cannot work without these")
+        addRow(must, "Microphone", true, { ensurePerms { refreshPermStatus() } }) { has(Manifest.permission.RECORD_AUDIO) }
+        addRow(must, "Notifications", true, { ensurePerms { refreshPermStatus() } }) {
             Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)
         }
-        addRow(must, "ব্যাটারি অপ্টিমাইজেশন থেকে ছাড়", true, { requestBatteryExemption() }) {
+        addRow(must, "Battery optimization exemption", true, { requestBatteryExemption() }) {
             (getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
         }
-        addRow(must, "ওয়েক ওয়ার্ড মডেল (~৪০ MB, একবারই)", true, { downloadModel() }) { ModelManager.isReady(this) }
+        addRow(must, "Wake word model (about 40 MB, one time)", true, { downloadModel() }) { ModelManager.isReady(this) }
         modelStatus = ui.statusText()
         must.addView(modelStatus)
         col.addView(must)
 
-        val people = ui.card("কল, মেসেজ ও কন্টাক্ট", "যে কাজ করাতে চান, শুধু তার অনুমতিই দিন")
+        val people = ui.card("Calls, messages and contacts", "Grant only what you plan to use")
         for ((name, perm) in listOf(
-            "ফোন করা" to Manifest.permission.CALL_PHONE,
-            "কন্টাক্ট পড়া" to Manifest.permission.READ_CONTACTS,
-            "ফোনের অবস্থা (SIM)" to Manifest.permission.READ_PHONE_STATE,
-            "ক্যামেরা (টর্চ)" to Manifest.permission.CAMERA,
-            "এসএমএস পাঠানো" to Manifest.permission.SEND_SMS,
-            "এসএমএস পড়া" to Manifest.permission.READ_SMS
+            "Make calls" to Manifest.permission.CALL_PHONE,
+            "Read contacts" to Manifest.permission.READ_CONTACTS,
+            "Phone state (SIM)" to Manifest.permission.READ_PHONE_STATE,
+            "Camera (torch)" to Manifest.permission.CAMERA,
+            "Send SMS" to Manifest.permission.SEND_SMS,
+            "Read SMS" to Manifest.permission.READ_SMS
         )) addRow(people, name, false, { requestCallPerms() }) { has(perm) }
         col.addView(people)
 
-        val special = ui.card("বিশেষ অনুমতি", "এগুলো সেটিংসে গিয়ে নিজে চালু করতে হয়")
-        addRow(special, "অন্য অ্যাপের উপর দেখানো", false, { requestOverlay() }) { BackgroundLauncher.canOverlay(this) }
-        addRow(special, "সিস্টেম সেটিংস বদল (ব্রাইটনেস)", false, { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) }) { Settings.System.canWrite(this) }
-        addRow(special, "সাইলেন্ট/DND নিয়ন্ত্রণ", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) }) {
+        val special = ui.card("Special access", "These are granted from system settings")
+        addRow(special, "Display over other apps", false, { requestOverlay() }) { BackgroundLauncher.canOverlay(this) }
+        addRow(special, "Modify system settings (brightness)", false, { openSpecialPermission(Settings.ACTION_MANAGE_WRITE_SETTINGS) }) { Settings.System.canWrite(this) }
+        addRow(special, "Do Not Disturb control", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) }) {
             (getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
         }
-        addRow(special, "নোটিফিকেশন পড়া (\"কে কল করছে\")", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) {
+        addRow(special, "Notification access (who is calling)", false, { openSpecialPermission(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) {
             BuildXNotificationListener.isEnabledInSettings(this)
         }
         col.addView(special)
 
-        val a11y = ui.card("Accessibility", "স্ক্রিন লক, ওয়াইফাই/ব্লুটুথ টগল, ট্যাপ ও টাইপ করার জন্য")
+        val a11y = ui.card("Accessibility", "Screen lock, Wi-Fi and Bluetooth toggles, tapping and typing")
         a11yStatus = ui.statusText()
         a11y.addView(a11yStatus)
-        a11y.addView(ui.primary("Accessibility সেটিংস খুলুন") { openAccessibilitySettings() })
-        a11y.addView(ui.pair(ui.quiet("অ্যাপ তথ্য") { openAppInfo() }, ui.quiet("জোর করে চালু") { forceEnableA11y() }))
-        a11y.addView(ui.expandable("চালু করার ধাপ",
-            "১. \"Accessibility সেটিংস খুলুন\" → \"ইনস্টল করা অ্যাপ\" (বা \"ডাউনলোড করা অ্যাপ\") → BuildX AI → চালু করুন।\n\n" +
-                "২. \"Restricted setting\" বলে আটকালে: \"OK\" চেপে বেরিয়ে আসুন → \"অ্যাপ তথ্য\" চাপুন → উপরে ডানের ⋮ → \"Allow restricted settings\" → PIN/ফিঙ্গারপ্রিন্ট দিন → আবার ধাপ ১। (এই অপশন আটকানোর বার্তা একবার দেখার পরেই আসে)\n\n" +
-                "৩. তাতেও না হলে নিচের \"স্ক্রিন লক\" কার্ড দিয়ে অন্তত স্ক্রিন লক চালানো যাবে।\n\n" +
-                "এটা চালু না করলে শুধু স্ক্রিন লক আর ওয়াইফাই/ব্লুটুথ নিজে টগল করা কাজ করবে না, বাকি সব কাজ করবে।"))
-        val (autoRow, autoSw) = ui.switchRow("ওয়াইফাই/ব্লুটুথ নিজে টগল করা", "Accessibility লাগে", prefs.getBoolean("autoToggle", true))
+        a11y.addView(ui.primary("Open Accessibility settings") { openAccessibilitySettings() })
+        a11y.addView(ui.pair(ui.quiet("App info") { openAppInfo() }, ui.quiet("Force enable") { forceEnableA11y() }))
+        a11y.addView(ui.expandable("How to turn it on",
+            "1. Tap \"Open Accessibility settings\", open \"Installed apps\" (or \"Downloaded apps\"), choose BuildX AI and turn it on.\n\n" +
+                "2. If the phone blocks it with \"Restricted setting\": tap OK, come back, tap \"App info\", open the menu at the top right, choose \"Allow restricted settings\", confirm with your PIN or fingerprint, then repeat step 1. This option only appears after the block message has been shown once.\n\n" +
+                "3. If that still fails, the screen lock card below can at least lock the screen.\n\n" +
+                "Without Accessibility, only locking the screen and toggling Wi-Fi or Bluetooth automatically will not work. Everything else will."))
+        val (autoRow, autoSw) = ui.switchRow("Toggle Wi-Fi and Bluetooth automatically", "Needs Accessibility", prefs.getBoolean("autoToggle", true))
         autoToggleBox = autoSw
         a11y.addView(autoRow)
         col.addView(a11y)
 
-        val assist = ui.card("ডিজিটাল অ্যাসিস্ট্যান্ট", "পপআপ, আর সিস্টেম নিজে অ্যাপকে চালু রাখে")
+        val assist = ui.card("Digital assistant", "Enables the popup and lets the system keep the app alive")
         assistStatus = ui.statusText()
         assist.addView(assistStatus)
-        assist.addView(ui.primary("ডিফল্ট অ্যাসিস্ট্যান্ট সেটিংস খুলুন") { openAssistantSettings() })
-        assist.addView(ui.expandable("এতে কী হয়?",
-            "সেখানে BuildX AI বেছে নিন। তারপর: (১) সাইড-কী/হোম-জেসচার চেপে ধরলে সরাসরি শোনা শুরু ও পপআপ আসবে, (২) ওয়েক ওয়ার্ড বললে লক স্ক্রিনের উপরেও পপআপ আসবে, (৩) সিস্টেম এই অ্যাপকে ফোন চালু হতেই সচল রাখবে।\n\n" +
-                "মনে রাখুন: অ্যাসিস্ট্যান্ট হলেও ফোন আনলক করা যায় না (সেটা শুধু আপনার PIN/ফিঙ্গারপ্রিন্ট), আর ওয়েক ওয়ার্ড শোনার ইঞ্জিন সিস্টেম দেয় না, সেটা BuildX-এর নিজের সার্ভিসই করে।"))
-        val (popRow, popSw) = ui.switchRow("ওয়েক ওয়ার্ডে পপআপ দেখাও", null, prefs.getBoolean("assistPopup", true))
+        assist.addView(ui.primary("Open default assistant settings") { openAssistantSettings() })
+        assist.addView(ui.expandable("What does this do?",
+            "Choose BuildX AI there. Then: (1) pressing and holding the side key or home gesture starts listening and shows the popup, (2) the wake word shows the popup even over the lock screen, (3) the system keeps this app running from the moment the phone starts.\n\n" +
+                "Note: being the assistant does not let it unlock the phone (only your PIN or fingerprint can), and the system does not provide the wake word engine. BuildX's own service does that."))
+        val (popRow, popSw) = ui.switchRow("Show popup on the wake word", null, prefs.getBoolean("assistPopup", true))
         popupBox = popSw
         assist.addView(popRow)
-        val (autoStartRow, autoStartSw) = ui.switchRow("অ্যাসিস্ট্যান্ট চালু হলে নিজে শোনা শুরু করা", null, prefs.getBoolean("assistAutoStart", true))
+        val (autoStartRow, autoStartSw) = ui.switchRow("Start listening when the assistant starts", null, prefs.getBoolean("assistAutoStart", true))
         autoStartBox = autoStartSw
         assist.addView(autoStartRow)
-        assist.addView(ui.quiet("পপআপ পরীক্ষা করো") { testPopup() })
+        assist.addView(ui.quiet("Test popup") { testPopup() })
         col.addView(assist)
 
-        val admin = ui.card("স্ক্রিন লক (Accessibility ছাড়া বিকল্প)")
+        val admin = ui.card("Screen lock", "An alternative to Accessibility for locking the screen")
         adminStatus = ui.statusText()
         admin.addView(adminStatus)
-        admin.addView(ui.pair(ui.tonal("চালু করুন") { enableDeviceAdmin() }, ui.quiet("বন্ধ করুন") { disableDeviceAdmin() }))
+        admin.addView(ui.pair(ui.tonal("Enable") { enableDeviceAdmin() }, ui.quiet("Disable") { disableDeviceAdmin() }))
         col.addView(admin)
 
-        val stab = ui.card("ফোন ও স্থায়িত্ব", "ফোন যেন সার্ভিসকে মেরে না ফেলে")
+        val stab = ui.card("Device and stability", "Keeps the phone from killing the service")
         stabilityStatus = ui.statusText()
         stab.addView(stabilityStatus)
-        stab.addView(ui.tonal("এই ফোনে চালু রাখার গাইড (ব্যাটারি/Autostart)") { showOemGuide() })
+        stab.addView(ui.tonal("Keep-alive guide for this phone") { showOemGuide() })
         col.addView(stab)
         return sv
     }
@@ -357,10 +366,10 @@ class MainActivity : Activity() {
     private fun buildSettings(): View {
         val (sv, col) = ui.page()
 
-        val lang = ui.card("ভাষা", "কমান্ড ও উত্তরের ভাষা")
+        val lang = ui.card("Language", "The language of your commands and the spoken replies")
         langGroup = RadioGroup(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(ui.radio("বাংলা", idBangla).apply { layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f) })
+            addView(ui.radio("Bangla", idBangla).apply { layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f) })
             addView(ui.radio("English", idEnglish).apply { layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f) })
             check(if (prefs.getString("lang", "bn-BD") == "en-US") idEnglish else idBangla)
             setOnCheckedChangeListener { _, _ -> saveSettings() }
@@ -369,38 +378,38 @@ class MainActivity : Activity() {
         col.addView(lang)
 
         // --- wake word ---
-        val wake = ui.card("ওয়েক ওয়ার্ড", "যে কথা বলে ডাকবেন। শোনা বন্ধ করে আবার চালু করলে নতুন সেটিং কাজ করে")
-        phraseInput = ui.input("ডিফল্ট: hey build", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, prefs.getString("wakePhrase", "") ?: "")
+        val wake = ui.card("Wake word", "The phrase that wakes the assistant. Stop and restart listening for changes to apply")
+        phraseInput = ui.input("Default: hey build", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, prefs.getString("wakePhrase", "") ?: "")
         wake.addView(phraseInput)
-        phraseStatus = ui.statusText().apply { text = "২–৪টা ইংরেজি শব্দ, যেমন যেভাবে শোনায়: hey jarvis, ok buddy" }
+        phraseStatus = ui.statusText().apply { text = "2 to 4 English words, spelled the way they sound, for example: hey jarvis, ok buddy" }
         wake.addView(phraseStatus)
-        wake.addView(ui.tonal("যাচাই করে সেভ করুন") { savePhrase() })
+        wake.addView(ui.tonal("Validate and save") { savePhrase() })
         wake.addView(ui.divider())
-        wake.addView(ui.label("কত সহজে ধরবে", 14f, bold = true))
+        wake.addView(ui.label("Sensitivity", 14f, bold = true))
         sensGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
         for (lv in WakeSensitivity.values()) sensGroup.addView(ui.radio(lv.label, 3000 + lv.ordinal))
         sensGroup.check(3000 + prefs.getInt("wakeSens", 1).coerceIn(0, 2))
         sensGroup.setOnCheckedChangeListener { _, checked -> prefs.edit().putInt("wakeSens", checked - 3000).apply() }
         wake.addView(sensGroup)
         wake.addView(ui.divider())
-        val (wlRow, wlSw) = ui.switchRow("স্ক্রিন অফেও শোনা", "WakeLock ধরে রাখে", prefs.getBoolean("wakeLock", true))
+        val (wlRow, wlSw) = ui.switchRow("Keep listening with the screen off", "Holds a wake lock", prefs.getBoolean("wakeLock", true))
         wakeLockBox = wlSw; saveOn(wlSw)
         wake.addView(wlRow)
-        val (lpRow, lpSw) = ui.switchRow("কম-ব্যাটারি শোনা (পরীক্ষামূলক)", "কণ্ঠ ধরলে তবেই চেনার কাজ চলে, বাকি সময় ঘুমায়। ওয়েক ওয়ার্ড কম ধরলে বন্ধ রাখুন", prefs.getBoolean("lowPower", false))
+        val (lpRow, lpSw) = ui.switchRow("Low-power listening (experimental)", "Recognition runs only when a voice is detected and sleeps the rest of the time. Turn it off if the wake word is missed", prefs.getBoolean("lowPower", false))
         lowPowerBox = lpSw
         lpSw.setOnCheckedChangeListener { _, on ->
             prefs.edit().putBoolean("lowPower", on).apply()
-            LogStore.add(this, "কম-ব্যাটারি শোনা: ${if (on) "চালু" else "বন্ধ"} (শোনা আবার চালু করলে কার্যকর)")
+            LogStore.add(this, "Low-power listening: ${if (on) "on" else "off"} (applies when listening restarts)")
         }
         wake.addView(lpRow)
-        val (vbRow, vbSw) = ui.switchRow("ডাকলে ভাইব্রেট করা", null, prefs.getBoolean("wakeVibrate", false))
+        val (vbRow, vbSw) = ui.switchRow("Vibrate when woken", null, prefs.getBoolean("wakeVibrate", false))
         vibrateBox = vbSw
         vbSw.setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("wakeVibrate", on).apply() }
         wake.addView(vbRow)
         col.addView(wake)
 
         // --- how it hears you (STT) ---
-        val stt = ui.card("আপনার কথা বোঝা", "কমান্ড কোন ইঞ্জিন দিয়ে লেখা হবে")
+        val stt = ui.card("Speech recognition", "The engine that turns your command into text")
         sttGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
         for (m in SttMode.values()) sttGroup.addView(ui.radio(m.label, 5000 + m.ordinal))
         sttGroup.check(5000 + SttMode.from(prefs.getString("sttMode", "system")).ordinal)
@@ -411,36 +420,36 @@ class MainActivity : Activity() {
         }
         stt.addView(sttGroup)
         stt.addView(sttNote)
-        stt.addView(ui.hint("Whisper বেছে নিলে আপনার বলা কমান্ডের অডিও আপনার নিজের প্রক্সি সার্ভারে যায় (শুধু https)। ব্যর্থ হলে ফোনের নিজস্ব ইঞ্জিনে ফিরে যায়। ঠিকানা ও টোকেন নিচের \"স্মার্ট সহকারী\" কার্ডে দিন।"))
+        stt.addView(ui.hint("If you choose Whisper, the audio of your commands is sent to your own proxy server (https only). If that fails, the phone's own engine takes over. Enter the address and token in the Smart assistant card below."))
         col.addView(stt)
 
         // --- how it talks (TTS) ---
-        val tts = ui.card("উত্তর বলার কণ্ঠ", "ভয়েস, গতি ও পিচ")
+        val tts = ui.card("Voice", "Voice, speed and pitch of the spoken replies")
         ttsInfo = ui.statusText()
         tts.addView(ttsInfo)
-        tts.addView(ui.tonal("ভয়েস বাছুন") { pickVoice() })
-        val rateLabel = ui.label("গতি: ${prefs.getInt("ttsRate", 100)}%", 13f)
+        tts.addView(ui.tonal("Choose voice") { pickVoice() })
+        val rateLabel = ui.label("Speed: ${prefs.getInt("ttsRate", 100)}%", 13f)
         tts.addView(rateLabel)
-        tts.addView(seek(0, 90, prefs.getInt("ttsRate", 100).coerceIn(60, 150) - 60, { rateLabel.text = "গতি: ${it + 60}%" }) {
+        tts.addView(seek(0, 90, prefs.getInt("ttsRate", 100).coerceIn(60, 150) - 60, { rateLabel.text = "Speed: ${it + 60}%" }) {
             prefs.edit().putInt("ttsRate", it + 60).apply(); speaker?.reapplyTuning()
         })
-        val pitchLabel = ui.label("পিচ: ${prefs.getInt("ttsPitch", 100)}%", 13f)
+        val pitchLabel = ui.label("Pitch: ${prefs.getInt("ttsPitch", 100)}%", 13f)
         tts.addView(pitchLabel)
-        tts.addView(seek(0, 60, prefs.getInt("ttsPitch", 100).coerceIn(70, 130) - 70, { pitchLabel.text = "পিচ: ${it + 70}%" }) {
+        tts.addView(seek(0, 60, prefs.getInt("ttsPitch", 100).coerceIn(70, 130) - 70, { pitchLabel.text = "Pitch: ${it + 70}%" }) {
             prefs.edit().putInt("ttsPitch", it + 70).apply(); speaker?.reapplyTuning()
         })
-        tts.addView(ui.pair(ui.primary("🔊  শুনুন") { testTts() }, ui.quiet("ইঞ্জিন সেটিংস") { openTtsSettings() }))
+        tts.addView(ui.pair(ui.primary("Play sample") { testTts() }, ui.quiet("Engine settings") { openTtsSettings() }))
         col.addView(tts)
 
         // --- voice lock ---
-        val vl = ui.card("আমার কণ্ঠ", "শুধু আমার ডাকে সাড়া দেবে")
+        val vl = ui.card("My voice", "Respond only when I say the wake word")
         voiceStatus = ui.statusText()
         vl.addView(voiceStatus)
-        vl.addView(ui.expandable("কীভাবে চালু করবেন?",
-            "(১) কণ্ঠ-মডেল নামান (একবার, ~১৩ MB, ইন্টারনেট লাগে)। (২) শোনা চালু করে সার্ভিস সচল রাখুন। (৩) \"রেজিস্টার\" চেপে শান্ত জায়গায় ৫ বার ওয়েক ওয়ার্ড বলুন, প্রতিবার একটু থেমে। (৪) নিচের সুইচ চালু করুন।\n\n" +
-                "কণ্ঠ শুধু ওয়েক ওয়ার্ড বলার সময় মেলানো হয়। তাই অন্য কেউ ডাকলে সাড়া দেবে না, কিন্তু আপনি ডাকার পর অন্য কেউ কমান্ড বললে আটকাবে না। ওয়েক ওয়ার্ড বদলালে আবার রেজিস্টার করুন। ভুল হলে নিচের কড়া/ঢিলা বদলান, লগে \"WAKE-VOICE দূরত্ব\" লাইন দেখুন।"))
-        vl.addView(ui.pair(ui.quiet("মডেল নামান") { downloadSpeakerModel() }, ui.tonal("রেজিস্টার") { enrollVoice() }))
-        val (vRow, vSw) = ui.switchRow("শুধু আমার কণ্ঠে সাড়া দাও", null, prefs.getBoolean("voiceLock", false))
+        vl.addView(ui.expandable("How to set it up",
+            "(1) Download the voice model (once, about 13 MB, needs internet). (2) Start listening so the service is running. (3) Tap Enroll, then say the wake word 5 times in a quiet place, pausing between each. (4) Turn on the switch below.\n\n" +
+                "Your voice is matched only while you say the wake word, so other people cannot wake it, but someone speaking a command after you have woken it will not be blocked. If you change the wake word, enroll again. If it misfires, switch between Strict and Loose below and look for the \"WAKE-VOICE distance\" line in the log."))
+        vl.addView(ui.pair(ui.quiet("Download model") { downloadSpeakerModel() }, ui.tonal("Enroll") { enrollVoice() }))
+        val (vRow, vSw) = ui.switchRow("Respond to my voice only", null, prefs.getBoolean("voiceLock", false))
         voiceBox = vSw
         vSw.setOnCheckedChangeListener { _, on ->
             prefs.edit().putBoolean("voiceLock", on).apply()
@@ -456,7 +465,7 @@ class MainActivity : Activity() {
             WakeService.instance?.reloadVoiceLock()
         }
         vl.addView(strictGroup)
-        vl.addView(ui.quiet("আমার কণ্ঠ মুছুন") {
+        vl.addView(ui.quiet("Delete my voice") {
             VoiceLockStore.clear(this)
             voiceBox.isChecked = false
             WakeService.instance?.reloadVoiceLock()
@@ -465,49 +474,49 @@ class MainActivity : Activity() {
         col.addView(vl)
 
         // --- calls ---
-        val calls = ui.card("কল ও কন্টাক্ট")
-        val (cfRow, cfSw) = ui.switchRow("কল করার আগে জিজ্ঞেস করা", "\"কল করব?\"। সার্ভারের বেছে নেওয়া কল সবসময় জিজ্ঞেস করা হয়", prefs.getBoolean("confirmCall", true))
+        val calls = ui.card("Calls and contacts")
+        val (cfRow, cfSw) = ui.switchRow("Ask before calling", "Asks \"Call?\" first. Calls chosen by the server always ask", prefs.getBoolean("confirmCall", true))
         confirmBox = cfSw; saveOn(cfSw)
         calls.addView(cfRow)
         simStatus = ui.statusText()
         calls.addView(simStatus)
         simGroup = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
         calls.addView(simGroup)
-        calls.addView(ui.label("উপনাম", 14f, bold = true))
-        nickInput = ui.input("প্রতি লাইনে একটি: বাবা = রহিম উদ্দিন", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE, prefs.getString("nicknames", "") ?: "", 2)
+        calls.addView(ui.label("Nicknames", 14f, bold = true))
+        nickInput = ui.input("One per line: Dad = Rahim Uddin", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE, prefs.getString("nicknames", "") ?: "", 2)
         calls.addView(nickInput)
-        calls.addView(ui.tonal("উপনাম সেভ") { saveSettings(); LogStore.add(this, "উপনাম সেভ হয়েছে") })
+        calls.addView(ui.tonal("Save nicknames") { saveSettings(); LogStore.add(this, "Nicknames saved") })
         col.addView(calls)
 
         // --- smart assistant (LLM) ---
-        val llm = ui.card("স্মার্ট সহকারী (ঐচ্ছিক, ইন্টারনেট লাগে)", "আপনার নিজের প্রক্সি সার্ভার দিয়ে চলে। বন্ধ থাকলে কিছুই বাইরে যায় না")
-        val (lRow, lSw) = ui.switchRow("না বুঝলে LLM-কে জিজ্ঞেস করা", "শুধু যে বাক্য অফলাইনে বোঝা যায়নি, সেটুকুর লেখা যায়। কন্টাক্ট বা অন্য কিছু যায় না", prefs.getBoolean(AndroidLlm.KEY_ENABLED, false))
+        val llm = ui.card("Smart assistant", "Optional, needs internet. Runs through your own proxy server and sends nothing while it is off")
+        val (lRow, lSw) = ui.switchRow("Ask the LLM when a command is not understood", "Only the sentence that could not be understood offline is sent. No contacts or other data", prefs.getBoolean(AndroidLlm.KEY_ENABLED, false))
         llmBox = lSw
         llm.addView(lRow)
         llmUrlInput = ui.input("https://.../api/assist", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, prefs.getString(AndroidLlm.KEY_URL, "") ?: "")
         llm.addView(llmUrlInput)
-        llmTokenInput = ui.input("টোকেন (প্রক্সির APP_TOKEN)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, prefs.getString(AndroidLlm.KEY_TOKEN, "") ?: "")
+        llmTokenInput = ui.input("Token (the proxy's APP_TOKEN)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, prefs.getString(AndroidLlm.KEY_TOKEN, "") ?: "")
         llm.addView(llmTokenInput)
         llm.addView(ui.divider())
-        val (aRow, aSw) = ui.switchRow("স্ক্রিন-এজেন্ট", "বড় কাজ, যেমন \"WhatsApp-এ রহিমকে হাই পাঠাও\": স্ক্রিন দেখে ধাপে ধাপে ট্যাপ ও টাইপ করে। চালু থাকলে কাজ চলার সময় স্ক্রিনের লেখা আপনার সার্ভারে যায়", prefs.getBoolean(AndroidLlm.KEY_AGENT, false))
+        val (aRow, aSw) = ui.switchRow("Screen agent", "For bigger tasks, such as \"send Rahim hi on WhatsApp\": reads the screen and taps and types step by step. While it is on, screen text is sent to your server during a task", prefs.getBoolean(AndroidLlm.KEY_AGENT, false))
         agentBox = aSw
         llm.addView(aRow)
-        llm.addView(ui.expandable("নিরাপত্তা", "পাসওয়ার্ডের স্ক্রিন ও টাকার অ্যাপ (বিকাশ, নগদ, ব্যাংক) কখনো পড়া বা পাঠানো হয় না, লম্বা সংখ্যা ঢেকে যায়। পাঠানো, কেনা, মোছা, কল: এসব বাটন চাপার আগে আপনাকে জিজ্ঞেস করে। নোটিফিকেশনে \"থামাও\" বোতাম থাকে। Accessibility চালু থাকতে হবে।"))
+        llm.addView(ui.expandable("Safety", "Password screens and money apps (bKash, Nagad, banks) are never read or sent, and long numbers are masked. Before pressing a button for send, buy, delete or call, it asks you first. The notification has a Stop button. Accessibility must be on."))
         llmStatus = ui.statusText()
         llm.addView(llmStatus)
-        llm.addView(ui.pair(ui.primary("সেভ করুন") {
+        llm.addView(ui.pair(ui.primary("Save") {
             saveSettings()
-            llmStatus.text = (if (llmBox.isChecked) "LLM চালু" else "LLM বন্ধ") + ", " + (if (agentBox.isChecked) "স্ক্রিন-এজেন্ট চালু" else "স্ক্রিন-এজেন্ট বন্ধ") + " (সেভ হয়েছে)"
+            llmStatus.text = "LLM " + (if (llmBox.isChecked) "on" else "off") + ", screen agent " + (if (agentBox.isChecked) "on" else "off") + " (saved)"
             refreshSttNote()
-        }, ui.quiet("সংযোগ টেস্ট") {
+        }, ui.quiet("Test connection") {
             saveSettings()
-            llmStatus.text = "পরীক্ষা করছি…"
+            llmStatus.text = "Testing..."
             AndroidLlm.test(this) { llmStatus.text = it }
         }))
         col.addView(llm)
 
-        val safe = ui.card("নিরাপত্তা", "যা সবসময় আপনাকে জিজ্ঞেস করে করা হয়")
-        safe.addView(ui.hint("• এসএমএস/WhatsApp মেসেজ: পড়ে শুনিয়ে \"পাঠাব?\" জিজ্ঞেস করে, হ্যাঁ বললে তবেই যায়\n• কল: নাম ও নম্বর বলে জিজ্ঞেস করে (সুইচ বন্ধ থাকলেও সার্ভারের বেছে নেওয়া কল জিজ্ঞেস করে)\n• সার্ভারের বেছে নেওয়া এয়ারপ্লেন, হটস্পট, মোবাইল ডেটা, DND: আগে জিজ্ঞেস করে\n• নিজে নিজে চলা রুটিনে কল বা মেসেজ চলে না"))
+        val safe = ui.card("Safety", "Always done only after asking you")
+        safe.addView(ui.hint("- SMS and WhatsApp messages: reads the message back, asks \"Send?\", and sends only after you say yes\n- Calls: says the name and number and asks first (calls chosen by the server ask even when the switch is off)\n- Airplane mode, hotspot, mobile data and Do Not Disturb chosen by the server: asks first\n- Routines that run on their own never place calls or send messages"))
         col.addView(safe)
         return sv
     }
@@ -528,14 +537,14 @@ class MainActivity : Activity() {
         when (val r = WakePhrase.parse(phraseInput.text.toString(), ModelManager.vocabulary(this))) {
             is WakePhrase.Parse.Ok -> {
                 prefs.edit().putString("wakePhrase", if (r.phrase.isDefault) "" else r.phrase.text).apply()
-                phraseStatus.text = "✓ সেভ হয়েছে: \"${r.phrase.display}\"" +
-                    (if (WakeService.running) "। শোনা বন্ধ করে আবার চালু করলে কাজ করবে" else "") +
-                    (if (VoiceLockStore.hasPrint(this) && !r.phrase.isDefault) "।\nকণ্ঠ-লক চালু থাকলে নতুন ওয়েক ওয়ার্ডে আবার রেজিস্টার করুন" else "") +
-                    (if (ModelManager.vocabulary(this) == null) "।\n(মডেলের শব্দ তালিকা না পাওয়ায় শব্দ যাচাই হয়নি, ধরছে কি না লগে দেখুন)" else "")
-                LogStore.add(this, "ওয়েক ওয়ার্ড সেভ: ${r.phrase.text}")
+                phraseStatus.text = "Saved: \"${r.phrase.display}\"" +
+                    (if (WakeService.running) ". Stop and restart listening to apply it" else "") +
+                    (if (VoiceLockStore.hasPrint(this) && !r.phrase.isDefault) ".\nIf voice lock is on, enroll your voice again with the new wake word" else "") +
+                    (if (ModelManager.vocabulary(this) == null) ".\n(The model's word list was not found, so the words were not checked. See in the log whether it triggers)" else "")
+                LogStore.add(this, "Wake word saved: ${r.phrase.text}")
                 refreshHome()
             }
-            is WakePhrase.Parse.Bad -> phraseStatus.text = "✗ ${r.reason}"
+            is WakePhrase.Parse.Bad -> phraseStatus.text = r.reason
         }
     }
 
@@ -543,15 +552,15 @@ class MainActivity : Activity() {
         val mode = SttMode.from(prefs.getString("sttMode", "system"))
         val configured = WhisperStt.configFrom(this) != null
         sttNote.text = when {
-            mode == SttMode.SYSTEM -> "ফোনের নিজস্ব ইঞ্জিন ব্যবহার হচ্ছে"
-            !configured -> "⚠ Whisper-এর জন্য নিচের কার্ডে https ঠিকানা ও টোকেন দিয়ে সেভ করুন, নাহলে ফোনের ইঞ্জিনই চলবে"
-            else -> "Whisper চালু: ${SttEndpoint.fromAssistUrl(prefs.getString(AndroidLlm.KEY_URL, ""))}"
+            mode == SttMode.SYSTEM -> "Using the phone's own engine"
+            !configured -> "Whisper needs an https address and token in the card below. Until then the phone's own engine is used"
+            else -> "Whisper on: ${SttEndpoint.fromAssistUrl(prefs.getString(AndroidLlm.KEY_URL, ""))}"
         }
     }
 
     private fun refreshTtsInfo() {
         val v = prefs.getString("ttsVoice", "").orEmpty()
-        ttsInfo.text = if (v.isEmpty()) "ভয়েস: অটো (সবচেয়ে ভালো অফলাইন ভয়েস)" else "ভয়েস: $v"
+        ttsInfo.text = if (v.isEmpty()) "Voice: Auto (best offline voice)" else "Voice: $v"
     }
 
     /** lists the installed voices of the chosen language; the person picks one, or "auto" */
@@ -561,13 +570,13 @@ class MainActivity : Activity() {
             if (isDestroyed) { sp.shutdown(); return@init }
             val list = sp.voices()
             if (list.isEmpty()) {
-                Toast.makeText(this, "এই ভাষার ভয়েস পাওয়া যায়নি। \"ইঞ্জিন সেটিংস\" থেকে ভয়েস ডেটা নামান", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "No voices found for this language. Download voice data from Engine settings", Toast.LENGTH_LONG).show()
                 sp.shutdown()
                 return@init
             }
-            val names = listOf("অটো (সবচেয়ে ভালো অফলাইন ভয়েস)") + list.map { it.label + (if (it.needsNetwork) " · ইন্টারনেট লাগে" else "") }
+            val names = listOf("Auto (best offline voice)") + list.map { it.label + (if (it.needsNetwork) " (needs internet)" else "") }
             AlertDialog.Builder(this)
-                .setTitle("ভয়েস বাছুন")
+                .setTitle("Choose voice")
                 .setItems(names.toTypedArray()) { _, i ->
                     prefs.edit().putString("ttsVoice", if (i == 0) "" else list[i - 1].name).apply()
                     speaker?.shutdown(); speaker = null
@@ -584,39 +593,39 @@ class MainActivity : Activity() {
     private fun buildTools(): View {
         val (sv, col) = ui.page()
 
-        val quick = ui.card("দ্রুত পরীক্ষা")
-        quick.addView(ui.tonal("🔊  TTS টেস্ট (আওয়াজ আসছে?)") { testTts() })
-        quick.addView(ui.tonal("🎤  কথা বলো (ওয়েক ওয়ার্ড ছাড়াই পুরো ধারা)") { talkNow() })
-        quick.addView(ui.tonal("STT টেস্ট (শুধু বাক্য চেনা)") { runSttTest() })
+        val quick = ui.card("Quick tests")
+        quick.addView(ui.tonal("Speech output test (can you hear it?)") { testTts() })
+        quick.addView(ui.tonal("Talk (full flow without the wake word)") { talkNow() })
+        quick.addView(ui.tonal("Speech input test (recognition only)") { runSttTest() })
         col.addView(quick)
 
-        val an = ui.card("কমান্ড বিশ্লেষণ", "কিছু চালানো ছাড়া দেখুন কী বুঝবে")
-        testInput = ui.input("একটা বাক্য বা নাম লিখুন")
+        val an = ui.card("Command analysis", "See how a sentence is understood without running it")
+        testInput = ui.input("Type a sentence or a name")
         an.addView(testInput)
-        an.addView(ui.pair(ui.primary("কী বুঝবে") { dryRun() }, ui.quiet("কন্টাক্ট মেলাও") { testContactMatch() }))
+        an.addView(ui.pair(ui.primary("Analyze") { dryRun() }, ui.quiet("Match contact") { testContactMatch() }))
         col.addView(an)
 
-        val rep = ui.card("চেকলিস্ট ও রিপোর্ট")
-        rep.addView(ui.primary("চেকলিস্ট খুলুন (প্রতি ফোনে)") { startActivity(Intent(this, ChecklistActivity::class.java)) })
-        rep.addView(ui.pair(ui.quiet("ডিভাইস রিপোর্ট কপি") { copyDeviceReport() }, ui.quiet("ক্র্যাশ লগ কপি") { copyCrashLog() }))
-        rep.addView(ui.quiet("ক্র্যাশ লগ মুছুন") { CrashLog.clear(this); refreshStability() })
+        val rep = ui.card("Checklist and reports")
+        rep.addView(ui.primary("Open device checklist") { startActivity(Intent(this, ChecklistActivity::class.java)) })
+        rep.addView(ui.pair(ui.quiet("Copy device report") { copyDeviceReport() }, ui.quiet("Copy crash log") { copyCrashLog() }))
+        rep.addView(ui.quiet("Clear crash log") { CrashLog.clear(this); refreshStability() })
         col.addView(rep)
 
-        val log = ui.card("লগ")
+        val log = ui.card("Log")
         logView = TextView(this).apply {
             typeface = Typeface.MONOSPACE
             textSize = 11.5f
             setTextColor(ui.c(R.color.bx_log_text))
             background = ui.rounded(ui.c(R.color.bx_log_bg), 12)
-            setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
+            setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12))
             setTextIsSelectable(true)
         }
         log.addView(logView)
-        log.addView(ui.pair(ui.quiet("লগ কপি") {
+        log.addView(ui.pair(ui.quiet("Copy log") {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("buildx-log", LogStore.read(this)))
-            Toast.makeText(this, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
-        }, ui.quiet("লগ মুছুন") { LogStore.clear(this) }))
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+        }, ui.quiet("Clear log") { LogStore.clear(this) }))
         col.addView(log)
         return sv
     }
@@ -656,11 +665,11 @@ class MainActivity : Activity() {
 
     private fun downloadModel() {
         if (ModelManager.isReady(this)) {
-            LogStore.add(this, "মডেল আগেই নামানো আছে")
+            LogStore.add(this, "Model is already downloaded")
             return
         }
         if (ModelManager.downloading) {
-            LogStore.add(this, "মডেল নামছে, অপেক্ষা করুন")
+            LogStore.add(this, "Model is downloading, please wait")
             return
         }
         ModelManager.download(this) {
@@ -671,7 +680,7 @@ class MainActivity : Activity() {
 
     private fun startListening() {
         if (!ModelManager.isReady(this)) {
-            LogStore.add(this, "আগে wake word মডেল নামান")
+            LogStore.add(this, "Download the wake word model first")
             return
         }
         ensurePerms {
@@ -685,7 +694,7 @@ class MainActivity : Activity() {
         ensurePerms {
             saveSettings()
             if (WakeService.running) {
-                LogStore.add(this, "আগে শোনা বন্ধ করুন (মাইক একসাথে দুইজন পায় না)")
+                LogStore.add(this, "Stop listening first (the microphone cannot be shared)")
             } else {
                 val lang = currentLang()
                 conversation?.cancel()
@@ -700,7 +709,7 @@ class MainActivity : Activity() {
         ensurePerms {
             saveSettings()
             if (WakeService.running) {
-                LogStore.add(this, "আগে শোনা বন্ধ করুন (মাইক একসাথে দুইজন পায় না)")
+                LogStore.add(this, "Stop listening first (the microphone cannot be shared)")
             } else {
                 val runner = SttRunner(this)
                 stt = runner
@@ -721,7 +730,7 @@ class MainActivity : Activity() {
             try {
                 waiting.onReply(text)
             } catch (e: Exception) {
-                ActionResult(false, "কাজটি করতে পারিনি: ${e.message}")
+                ActionResult(false, if (lang.startsWith("bn")) "কাজটি করতে পারিনি: ${e.message}" else "I could not do that: ${e.message}")
             }
         } else {
             CommandPipeline.run(ActionContext(this, lang), text)
@@ -738,7 +747,7 @@ class MainActivity : Activity() {
             return
         }
         pendingFollowUp = result.followUp
-        LogStore.add(this, "টেক্সট উত্তর: ${result.message}${if (result.followUp != null) "  (উত্তরের অপেক্ষায়: এখানেই লিখুন)" else ""}")
+        LogStore.add(this, "Text reply: ${result.message}${if (result.followUp != null) "  (waiting for your answer: type it here)" else ""}")
         ensureSpeaker(lang).speak(result.message) { }
     }
 
@@ -746,11 +755,11 @@ class MainActivity : Activity() {
     private fun dryRun() {
         val text = testInput.text.toString().trim()
         if (text.isEmpty()) {
-            LogStore.add(this, "ঘরে একটা বাক্য লিখুন, তারপর এই বাটন")
+            LogStore.add(this, "Type a sentence in the box first, then press this button")
             return
         }
         val steps = IntentParser.parseChain(text)
-        LogStore.add(this, "বোঝা: \"$text\" → ${steps.size} ধাপ")
+        LogStore.add(this, "Parsed: \"$text\" -> ${steps.size} step(s)")
         steps.forEachIndexed { i, p ->
             LogStore.add(this, " ${i + 1}. ${p.intent} ${p.slots}  — ${Describe.say(p, true)}")
         }
@@ -760,24 +769,24 @@ class MainActivity : Activity() {
     private fun testContactMatch() {
         val name = testInput.text.toString().trim()
         if (name.isEmpty()) {
-            LogStore.add(this, "ঘরে একটা নাম লিখুন, তারপর এই বাটন")
+            LogStore.add(this, "Type a name in the box first, then press this button")
             return
         }
         saveSettings()
         val all = AndroidContacts(this).all()
         if (all == null) {
-            LogStore.add(this, "কন্টাক্ট পড়ার পারমিশন নেই")
+            LogStore.add(this, "No permission to read contacts")
             return
         }
         val found = NameMatcher.find(name, all, NicknameBook.parse(prefs.getString("nicknames", "") ?: ""))
         val group = NameMatcher.bestGroup(found)
         if (found.isEmpty()) {
-            LogStore.add(this, "MATCH \"$name\": কেউ নেই (${all.size}টি কন্টাক্টের মধ্যে)")
+            LogStore.add(this, "MATCH \"$name\": no match (among ${all.size} contacts)")
             return
         }
-        LogStore.add(this, "MATCH \"$name\": ${if (group.size == 1) "একজন নিশ্চিত" else "${group.size} জন সমান, জিজ্ঞেস করবে"}")
+        LogStore.add(this, "MATCH \"$name\": ${if (group.size == 1) "one confident match" else "${group.size} equal matches, will ask"}")
         for (m in found.take(5)) {
-            val mark = if (m in group) "→" else " "
+            val mark = if (m in group) ">" else " "
             val last = m.contact.numbers.firstOrNull()?.number?.takeLast(4) ?: "-"
             LogStore.add(this, " $mark ${"%.2f".format(m.score)}  ${m.contact.name}  (…$last)")
         }
@@ -793,7 +802,7 @@ class MainActivity : Activity() {
             Manifest.permission.READ_SMS
         ).plus(if (Build.VERSION.SDK_INT >= 31) listOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyList()).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (need.isEmpty()) {
-            LogStore.add(this, "কল ও কন্টাক্টের পারমিশন আগেই দেওয়া আছে")
+            LogStore.add(this, "Call and contact permissions are already granted")
         } else {
             requestPermissions(need.toTypedArray(), reqCallPerm)
         }
@@ -806,14 +815,14 @@ class MainActivity : Activity() {
         simGroup.removeAllViews()
         if (accounts.size < 2) {
             simStatus.text = if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED)
-                "SIM: পারমিশন দিলে এখানে SIM বেছে নেওয়া যাবে" else "SIM: একটাই (ডিফল্ট)"
+                "SIM: grant the permission to choose a SIM here" else "SIM: single (default)"
             return
         }
-        simStatus.text = "কোন SIM দিয়ে কল হবে:"
+        simStatus.text = "SIM to call with:"
         val saved = prefs.getString("simId", "") ?: ""
         val ids = ArrayList<String>()
         val labels = ArrayList<String>()
-        ids.add(""); labels.add("ফোন নিজে ঠিক করবে (ডিফল্ট)")
+        ids.add(""); labels.add("Let the phone decide (default)")
         for (a in accounts) { ids.add(SimHelper.idOf(a)); labels.add(SimHelper.label(this, a)) }
         var checkedId = -1
         for (i in ids.indices) {
@@ -824,7 +833,7 @@ class MainActivity : Activity() {
         simGroup.check(if (checkedId != -1) checkedId else 2000)
         simGroup.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putString("simId", ids[checked - 2000]).apply()
-            LogStore.add(this, "SIM বাছাই: ${labels[checked - 2000]}")
+            LogStore.add(this, "SIM selected: ${labels[checked - 2000]}")
         }
     }
 
@@ -842,7 +851,7 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent("com.android.settings.TTS_SETTINGS"))
         } catch (e: Exception) {
-            LogStore.add(this, "TTS সেটিংস সরাসরি খোলা যায়নি; Settings > General management > Text-to-speech খুঁজুন")
+            LogStore.add(this, "Could not open TTS settings directly; look under Settings > General management > Text-to-speech")
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (_: Exception) {
@@ -881,9 +890,9 @@ class MainActivity : Activity() {
 
     private fun refreshAssistant() {
         val active = BuildXVoiceInteractionService.isActive(this)
-        assistStatus.text = if (active) "ডিফল্ট অ্যাসিস্ট্যান্ট: ✓ BuildX AI" else "ডিফল্ট অ্যাসিস্ট্যান্ট: ✗ BuildX নয় (নিচের বাটনে বেছে নিন)"
+        assistStatus.text = if (active) "Default assistant: BuildX AI" else "Default assistant: not BuildX (choose it with the button below)"
         val admin = BuildXDeviceAdmin.isActive(this)
-        adminStatus.text = if (admin) "Device admin: ✓ চালু (স্ক্রিন লক করতে পারবে)" else "Device admin: ✗ বন্ধ"
+        adminStatus.text = if (admin) "Device admin: on (can lock the screen)" else "Device admin: off"
     }
 
     private fun openAssistantSettings() {
@@ -893,7 +902,7 @@ class MainActivity : Activity() {
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (e2: Exception) {
-                LogStore.add(this, "অ্যাসিস্ট্যান্ট সেটিংস খোলা যায়নি: ${e2.message}")
+                LogStore.add(this, "Could not open assistant settings: ${e2.message}")
             }
         }
     }
@@ -901,13 +910,13 @@ class MainActivity : Activity() {
     private fun testPopup() {
         val svc = BuildXVoiceInteractionService.instance
         if (svc == null) {
-            LogStore.add(this, "পপআপ: BuildX এখনো ডিফল্ট অ্যাসিস্ট্যান্ট নয় (বা সিস্টেম এখনো সংযোগ দেয়নি)")
+            LogStore.add(this, "Popup: BuildX is not the default assistant yet (or the system has not connected yet)")
             return
         }
         AssistantBridge.clear()
         if (svc.show(fromWake = true)) {
-            AssistantBridge.post("🎙 পরীক্ষা: এটা পপআপের নমুনা")
-            AssistantBridge.post("→ লগ এভাবে দেখাবে")
+            AssistantBridge.post("Test: this is a sample popup")
+            AssistantBridge.post("Log lines will appear like this")
             AssistantBridge.hideLater(4000)
         }
     }
@@ -917,10 +926,10 @@ class MainActivity : Activity() {
             startActivity(
                 Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
                     .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, BuildXDeviceAdmin.component(this))
-                    .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "শুধু \"স্ক্রিন লক করো\" কমান্ডের জন্য। আর কিছু করতে পারবে না। বন্ধ করতে অ্যাপের \"Device admin বন্ধ করুন\" বাটন চাপুন।")
+                    .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Only for the \"lock the screen\" command. It cannot do anything else. To turn it off, press \"Disable\" in the app.")
             )
         } catch (e: Exception) {
-            LogStore.add(this, "Device admin চালু করার স্ক্রিন খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open the Device admin screen: ${e.message}")
         }
     }
 
@@ -934,17 +943,17 @@ class MainActivity : Activity() {
         val model = ModelManager.isSpkReady(this)
         val enrolled = VoiceLockStore.hasPrint(this)
         val on = VoiceLockStore.load(this) != null
-        voiceStatus.text = "কণ্ঠ-মডেল: ${if (model) "✓" else "✗"}   রেজিস্টার: ${if (enrolled) "✓" else "✗"}   কণ্ঠ-লক: ${if (on) "চালু ✓" else "বন্ধ"}"
+        voiceStatus.text = "Voice model: ${if (model) "ready" else "not downloaded"}\nEnrolled: ${if (enrolled) "yes" else "no"}\nVoice lock: ${if (on) "on" else "off"}"
     }
 
     private fun downloadSpeakerModel() {
         if (ModelManager.isSpkReady(this)) {
-            LogStore.add(this, "কণ্ঠ-মডেল আগেই নামানো আছে")
+            LogStore.add(this, "Voice model is already downloaded")
             return
         }
-        LogStore.add(this, "কণ্ঠ-মডেল নামছে...")
+        LogStore.add(this, "Voice model downloading...")
         ModelManager.downloadSpk(this) { ok ->
-            LogStore.add(this, if (ok) "কণ্ঠ-মডেল প্রস্তুত। শোনা বন্ধ করে আবার চালু করুন, তারপর রেজিস্টার করুন" else "কণ্ঠ-মডেল নামানো যায়নি (ইন্টারনেট?)")
+            LogStore.add(this, if (ok) "Voice model ready. Stop and restart listening, then enroll" else "Voice model download failed (no internet?)")
             refreshVoice()
         }
     }
@@ -952,14 +961,14 @@ class MainActivity : Activity() {
     private fun enrollVoice() {
         val svc = WakeService.instance
         if (svc == null) {
-            LogStore.add(this, "আগে \"শোনা চালু করুন\" চাপুন, তারপর রেজিস্টার")
+            LogStore.add(this, "Press \"Start listening\" first, then enroll")
             return
         }
-        LogStore.add(this, "কণ্ঠ রেজিস্টার: ৫ বার \"${WakePhrase.fromPref(prefs.getString("wakePhrase", "")).display}\" বলুন, প্রতিবার একটু থেমে (৯০ সেকেন্ড সময়)")
+        LogStore.add(this, "Voice enrollment: say \"${WakePhrase.fromPref(prefs.getString("wakePhrase", "")).display}\" 5 times, pausing between each (90 seconds)")
         svc.startEnroll(5, { n, d ->
-            LogStore.add(this, "কণ্ঠ নমুনা $n/৫${d?.let { " (গড় থেকে দূরত্ব ${"%.2f".format(it)})" } ?: ""}")
+            LogStore.add(this, "Voice sample $n/5${d?.let { " (distance from average ${"%.2f".format(it)})" } ?: ""}")
         }, { ok, msg ->
-            LogStore.add(this, (if (ok) "✓ " else "✗ ") + msg)
+            LogStore.add(this, msg)
             voiceBox.isChecked = VoiceLockStore.load(this) != null
             refreshVoice()
         })
@@ -970,7 +979,7 @@ class MainActivity : Activity() {
             val i = if (action == Settings.ACTION_MANAGE_WRITE_SETTINGS) Intent(action, Uri.parse("package:$packageName")) else Intent(action)
             startActivity(i)
         } catch (e: Exception) {
-            LogStore.add(this, "সেটিংস খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open settings: ${e.message}")
         }
     }
 
@@ -979,20 +988,20 @@ class MainActivity : Activity() {
         val died = prefs.getBoolean("svcDied", false)
         val crash = CrashLog.read(this) != null
         stabilityStatus.text = "${Build.MANUFACTURER} ${Build.MODEL} ($maker)\n" +
-            (if (died) "⚠ সার্ভিস গতবার নিজে বন্ধ হয়নি (মোট ${prefs.getInt("svcKills", 0)} বার), গাইড দেখুন\n" else "সার্ভিস: গতবার স্বাভাবিকভাবে বন্ধ হয়েছে বা প্রথমবার\n") +
-            (if (crash) "⚠ ক্র্যাশ লগ আছে, \"ক্র্যাশ লগ কপি করো\" চাপুন" else "ক্র্যাশ: নেই")
+            (if (died) "The service was stopped abnormally last time (${prefs.getInt("svcKills", 0)} times in total). See the guide\n" else "Service: stopped normally last time, or this is the first run\n") +
+            (if (crash) "A crash log exists. Press \"Copy crash log\"" else "Crashes: none")
     }
 
     private fun showOemGuide() {
         val guide = OemGuide.forDevice(Build.MANUFACTURER, Build.BRAND)
         AlertDialog.Builder(this)
-            .setTitle("চালু রাখার গাইড")
+            .setTitle("Keep-alive guide")
             .setMessage(OemGuide.format(guide))
-            .setPositiveButton("সেটিংস খুলুন") { _, _ ->
+            .setPositiveButton("Open settings") { _, _ ->
                 val specific = OemSettings.open(this, guide)
-                if (!specific) LogStore.add(this, "ফোনের নিজস্ব স্ক্রিন পাইনি, অ্যাপ তথ্য খুলেছি। গাইডের ধাপ হাতে করে করুন")
+                if (!specific) LogStore.add(this, "Could not find the phone's own screen, opened app info instead. Follow the guide steps by hand")
             }
-            .setNegativeButton("বন্ধ", null)
+            .setNegativeButton("Close", null)
             .show()
     }
 
@@ -1000,17 +1009,17 @@ class MainActivity : Activity() {
         fun has(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         return linkedMapOf(
-            "মাইক" to has(Manifest.permission.RECORD_AUDIO),
-            "নোটিফিকেশন" to (Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)),
-            "কল" to has(Manifest.permission.CALL_PHONE),
-            "কন্টাক্ট" to has(Manifest.permission.READ_CONTACTS),
-            "এসএমএস পাঠানো" to has(Manifest.permission.SEND_SMS),
-            "এসএমএস পড়া" to has(Manifest.permission.READ_SMS),
-            "নোটিফিকেশন পড়া" to BuildXNotificationListener.isEnabledInSettings(this),
-            "ফোন-অবস্থা" to has(Manifest.permission.READ_PHONE_STATE),
-            "ব্যাটারি ছাড়" to pm.isIgnoringBatteryOptimizations(packageName),
-            "ওভারলে" to BackgroundLauncher.canOverlay(this),
-            "Accessibility (সংযুক্ত)" to (BuildXAccessibilityService.instance != null)
+            "Microphone" to has(Manifest.permission.RECORD_AUDIO),
+            "Notifications" to (Build.VERSION.SDK_INT < 33 || has(Manifest.permission.POST_NOTIFICATIONS)),
+            "Calls" to has(Manifest.permission.CALL_PHONE),
+            "Contacts" to has(Manifest.permission.READ_CONTACTS),
+            "Send SMS" to has(Manifest.permission.SEND_SMS),
+            "Read SMS" to has(Manifest.permission.READ_SMS),
+            "Notification access" to BuildXNotificationListener.isEnabledInSettings(this),
+            "Phone state" to has(Manifest.permission.READ_PHONE_STATE),
+            "Battery exemption" to pm.isIgnoringBatteryOptimizations(packageName),
+            "Overlay" to BackgroundLauncher.canOverlay(this),
+            "Accessibility (connected)" to (BuildXAccessibilityService.instance != null)
         )
     }
 
@@ -1028,36 +1037,36 @@ class MainActivity : Activity() {
             permissionMap(), WakeService.running, prefs.getBoolean("svcDied", false), prefs.getInt("svcKills", 0),
             CrashLog.read(this), LogStore.read(this).lines().filter { it.isNotBlank() }.takeLast(80)
         )
-        copyToClipboard("BuildX রিপোর্ট", DeviceReport.format(info))
+        copyToClipboard("BuildX report", DeviceReport.format(info))
     }
 
     private fun copyCrashLog() {
         val c = CrashLog.read(this)
-        if (c == null) Toast.makeText(this, "কোনো ক্র্যাশ লগ নেই", Toast.LENGTH_SHORT).show()
+        if (c == null) Toast.makeText(this, "No crash log", Toast.LENGTH_SHORT).show()
         else copyToClipboard("BuildX crash", c)
     }
 
     private fun copyToClipboard(label: String, text: String) {
         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(this, "কপি হয়েছে, এখন মেসেজে পেস্ট করুন", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Copied. Paste it into a message", Toast.LENGTH_SHORT).show()
     }
 
     private fun refreshA11y() {
         val connected = BuildXAccessibilityService.instance != null
         val enabled = BuildXAccessibilityService.isEnabledInSettings(this)
         a11yStatus.text = when {
-            connected -> "Accessibility: ✓ চালু ও সংযুক্ত"
-            enabled -> "Accessibility: চালু করা আছে, সংযোগের অপেক্ষায় (কয়েক সেকেন্ড পরে আবার দেখুন)"
-            else -> "Accessibility: ✗ বন্ধ (নিচের ধাপ দেখুন)"
+            connected -> "Accessibility: on and connected"
+            enabled -> "Accessibility: enabled, waiting to connect (check again in a few seconds)"
+            else -> "Accessibility: off (see the steps below)"
         }
     }
 
     private fun forceEnableA11y() {
         if (A11yEnabler.enable(this)) {
-            LogStore.add(this, "Accessibility চালু করা হয়েছে (কয়েক সেকেন্ডে সংযুক্ত দেখাবে)")
+            LogStore.add(this, "Accessibility turned on (it will show as connected in a few seconds)")
             refreshA11y()
         } else {
-            LogStore.add(this, "অনুমতি নেই। কম্পিউটারে ফোন USB বা ওয়্যারলেস ডিবাগিংয়ে যুক্ত করে একবার চালান: adb shell pm grant $packageName android.permission.WRITE_SECURE_SETTINGS")
+            LogStore.add(this, "No permission. Connect the phone to a computer by USB or wireless debugging and run once: adb shell pm grant $packageName android.permission.WRITE_SECURE_SETTINGS")
         }
     }
 
@@ -1065,7 +1074,7 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         } catch (e: Exception) {
-            LogStore.add(this, "Accessibility সেটিংস খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open Accessibility settings: ${e.message}")
         }
     }
 
@@ -1073,7 +1082,7 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
         } catch (e: Exception) {
-            LogStore.add(this, "অ্যাপ তথ্য খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open app info: ${e.message}")
         }
     }
 
@@ -1081,7 +1090,7 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         } catch (e: Exception) {
-            LogStore.add(this, "ওভারলে সেটিংস খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open overlay settings: ${e.message}")
         }
     }
 
@@ -1091,7 +1100,7 @@ class MainActivity : Activity() {
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
             )
         } catch (e: Exception) {
-            LogStore.add(this, "ব্যাটারি সেটিংস খোলা যায়নি: ${e.message}")
+            LogStore.add(this, "Could not open battery settings: ${e.message}")
         }
     }
 
@@ -1123,7 +1132,7 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == reqPerm) {
             val audioOk = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            if (audioOk) pendingAction?.invoke() else LogStore.add(this, "মাইক পারমিশন ছাড়া চলবে না")
+            if (audioOk) pendingAction?.invoke() else LogStore.add(this, "This will not work without the microphone permission")
             pendingAction = null
             refreshPermStatus()
         }
@@ -1144,13 +1153,11 @@ class MainActivity : Activity() {
     private fun refreshModelStatus() {
         modelStatus.text = when {
             ModelManager.isReady(this) -> ""
-            ModelManager.downloading -> "মডেল নামছে... (লগে অগ্রগতি দেখুন)"
+            ModelManager.downloading -> "Model downloading... (see the log for progress)"
             else -> ""
         }
         refreshPermStatus()
     }
-
-    private fun tick(ok: Boolean): String = if (ok) "✓" else "✗"
 
     /** the home tab shows the last few lines; the full log (can be 200 KB) is only put on screen while its tab is open */
     private fun refreshLog() {
