@@ -915,9 +915,13 @@ class MainActivity : Activity() {
         }
         AssistantBridge.clear()
         if (svc.show(fromWake = true)) {
-            AssistantBridge.post("Test: this is a sample popup")
-            AssistantBridge.post("Log lines will appear like this")
-            AssistantBridge.hideLater(4000)
+            // a short pretend exchange, so the popup can be seen in each of its states
+            val h = window.decorView
+            AssistantBridge.post("Listening...")
+            h.postDelayed({ AssistantBridge.post("Heard: \"What time is it\"") }, 1200)
+            h.postDelayed({ AssistantBridge.post("Result: It is 10:30") }, 2200)
+            h.postDelayed({ AssistantBridge.post("Listening...") }, 3400)
+            AssistantBridge.hideLater(6500)
         }
     }
 
