@@ -152,7 +152,7 @@ class WhisperStt(private val ctx: Context, private val cfg: LlmConfig) {
 
     companion object {
         const val FRAME = 320
-        private const val MAX_WAIT_FRAMES = 300 // 6 s without a word
+        private const val MAX_WAIT_FRAMES = 250 // 5 s without a word
         private const val MAX_FRAMES = 750 // 15 s
         fun configFrom(ctx: Context): LlmConfig? {
             val p = ctx.applicationContext.getSharedPreferences("buildx", Context.MODE_PRIVATE)

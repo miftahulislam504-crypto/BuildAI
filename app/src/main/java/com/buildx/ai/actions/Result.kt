@@ -10,7 +10,11 @@ data class ActionResult(
     val success: Boolean,
     val message: String,
     val followUp: FollowUp? = null,
-    val deferred: Deferred? = null
+    val deferred: Deferred? = null,
+    /** the sentence was not understood at all (the session keeps listening, but counts it) */
+    val unrecognized: Boolean = false,
+    /** the person said "never mind" / "stop": close the session instead of listening again */
+    val endsSession: Boolean = false
 )
 
 class FollowUp(val onReply: (String?) -> ActionResult)

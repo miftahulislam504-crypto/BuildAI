@@ -8,13 +8,16 @@ import android.os.Looper
  * the popup, if it is on screen, draws them. Main thread only.
  */
 object AssistantBridge {
-    private const val MAX_LINES = 8
+    private const val MAX_LINES = 16
     private val main = Handler(Looper.getMainLooper())
     private val lines = ArrayList<String>()
 
     /** the popup, while it is showing */
     var session: BuildXSession? = null
     var render: ((List<String>) -> Unit)? = null
+
+    /** the lines so far, for a popup that has just appeared */
+    fun current(): List<String> = lines.toList()
 
     fun clear() {
         lines.clear()

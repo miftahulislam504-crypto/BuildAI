@@ -66,8 +66,26 @@ class SttRunner(private val ctx: Context) {
     }
 
     private var whisper: WhisperStt? = null
+    private var attempt = 0
+    private var silenceMs = 0L
+    private var spoke = false
 
-    fun start(lang: String, onDone: (String?) -> Unit) {
+    /** true when the person said nothing at all (not an error, and not something that was misunderstood) */
+    @Volatile
+    var silent = false
+        private set
+
+    /** fires when the microphone has been open for [silenceMs] and nobody has started speaking */
+    private val silenceTimer = Runnable {
+        if (!done && !spoke) {
+            LogStore.add(ctx, "STT: no speech for ${silenceMs / 1000} seconds")
+            silent = true
+            finish(null)
+        }
+    }
+
+    fun start(lang: String, silenceMs: Long = 0L, onDone: (String?) -> Unit) {
+        this.silenceMs = silenceMs
         this.onDone = onDone
 
         // Phase 5: Whisper first when the person chose it (and the proxy is set); any failure falls back to the phone's recognizer
@@ -83,7 +101,10 @@ class SttRunner(private val ctx: Context) {
                 main.removeCallbacks(watchdog)
                 when (t) {
                     is Transcript.Text -> finish(t.text)
-                    is Transcript.Silence -> finish(null)
+                    is Transcript.Silence -> {
+                        silent = true
+                        finish(null)
+                    }
                     is Transcript.Failed -> {
                         LogStore.add(ctx, "STT[whisper] failed (${t.why}), falling back to the phone's recognizer")
                         if (!done) startSystem(lang)
@@ -109,9 +130,16 @@ class SttRunner(private val ctx: Context) {
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 LogStore.add(ctx, "STT: speak now ($lang)")
+                if (silenceMs > 0) {
+                    main.removeCallbacks(silenceTimer)
+                    main.postDelayed(silenceTimer, silenceMs)
+                }
             }
 
-            override fun onBeginningOfSpeech() {}
+            override fun onBeginningOfSpeech() {
+                spoke = true
+                main.removeCallbacks(silenceTimer)
+            }
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {}
@@ -121,6 +149,23 @@ class SttRunner(private val ctx: Context) {
             override fun onError(error: Int) {
                 val ms = SystemClock.elapsedRealtime() - t0
                 LogStore.add(ctx, "STT error: ${errorName(error)} (${ms}ms)")
+                if (!done && attempt < 1) {
+                    val languageMissing = error == 12 || error == 13
+                    val failedFast = ms < 2000 && error in FAST_RETRY_ERRORS
+                    if (languageMissing && lang.startsWith("bn") && lang != "bn-IN") {
+                        attempt++
+                        LogStore.add(ctx, "STT: $lang is not available on this phone, trying bn-IN")
+                        restart("bn-IN")
+                        return
+                    }
+                    if (failedFast) {
+                        attempt++
+                        LogStore.add(ctx, "STT: failed right away, trying once more")
+                        restart(lang)
+                        return
+                    }
+                }
+                if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT && !spoke) silent = true
                 finish(null)
             }
 
@@ -139,15 +184,33 @@ class SttRunner(private val ctx: Context) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            // do not cut the person off at the first short pause (some recognizers ignore these, the Google one honours them)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
         }
         main.postDelayed(watchdog, 15000)
         r.startListening(intent)
+    }
+
+    /** drop the current recognizer and start a fresh one a moment later (used for the single quiet retry) */
+    private fun restart(lang: String) {
+        main.removeCallbacks(watchdog)
+        main.removeCallbacks(silenceTimer)
+        spoke = false
+        try {
+            recognizer?.cancel()
+            recognizer?.destroy()
+        } catch (_: Exception) {
+        }
+        recognizer = null
+        main.postDelayed({ if (!done) startSystem(lang) }, 400)
     }
 
     private fun finish(result: String?) {
         if (done) return
         done = true
         main.removeCallbacks(watchdog)
+        main.removeCallbacks(silenceTimer)
         whisper?.cancel() // a timeout must also free the microphone
         whisper = null
         try {
@@ -162,6 +225,7 @@ class SttRunner(private val ctx: Context) {
     fun cancel() {
         done = true
         main.removeCallbacks(watchdog)
+        main.removeCallbacks(silenceTimer)
         whisper?.cancel()
         whisper = null
         try {
@@ -170,6 +234,17 @@ class SttRunner(private val ctx: Context) {
         } catch (_: Exception) {
         }
         recognizer = null
+    }
+
+    private companion object {
+        /** errors that, when they come within two seconds, usually mean "the recognizer was not ready", not "you said nothing" */
+        val FAST_RETRY_ERRORS = setOf(
+            SpeechRecognizer.ERROR_CLIENT,
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+            SpeechRecognizer.ERROR_AUDIO,
+            SpeechRecognizer.ERROR_NO_MATCH,
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+        )
     }
 
     private fun errorName(e: Int): String = when (e) {

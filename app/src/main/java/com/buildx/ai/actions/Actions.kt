@@ -116,9 +116,9 @@ object UnknownAction : Action {
     override fun execute(ac: ActionContext, params: Map<String, String>): ActionResult {
         val text = params["text"] ?: ""
         return if (ac.bn) {
-            ActionResult(false, "বুঝতে পারিনি: $text")
+            ActionResult(false, "বুঝতে পারিনি: $text", unrecognized = true)
         } else {
-            ActionResult(false, "I didn't understand: $text")
+            ActionResult(false, "I didn't understand: $text", unrecognized = true)
         }
     }
 }
@@ -128,7 +128,7 @@ object CancelAction : Action {
     override val name = "cancel"
 
     override fun execute(ac: ActionContext, params: Map<String, String>): ActionResult =
-        ActionResult(true, if (ac.bn) "ঠিক আছে" else "Okay")
+        ActionResult(true, if (ac.bn) "ঠিক আছে" else "Okay", endsSession = true)
 }
 
 fun toBanglaDigits(n: Int): String =

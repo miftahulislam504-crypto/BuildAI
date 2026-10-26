@@ -79,7 +79,7 @@ class LlmFallback(
                     Failure.BUSY -> if (bn) "সার্ভার ব্যস্ত। " else "The server is busy. "
                     Failure.SERVER, Failure.BAD_RESPONSE -> if (bn) "সার্ভার থেকে ঠিক উত্তর আসেনি। " else "The server gave no usable answer. "
                 }
-                ActionResult(false, why + if (bn) "বুঝতে পারিনি: $text" else "I didn't understand: $text")
+                ActionResult(false, why + if (bn) "বুঝতে পারিনি: $text" else "I didn't understand: $text", unrecognized = true)
             }
         }
 }
