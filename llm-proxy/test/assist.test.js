@@ -66,6 +66,7 @@ test('bad bodies are rejected before any model call', async () => {
   for (const body of [
     null, {}, { ...BODY, text: '' }, { ...BODY, text: 'x'.repeat(501) }, { ...BODY, tools: [] },
     { ...BODY, tools: [{ ...TOOLS[0], name: 'say' }] },
+    { ...BODY, tools: [{ ...TOOLS[0], name: 'ask' }] },
     { ...BODY, tools: [{ ...TOOLS[0], name: 'Bad Name!' }] },
     { ...BODY, tools: [{ ...TOOLS[0], input_schema: { type: 'string' } }] },
     { ...BODY, tools: Array.from({ length: 41 }, () => TOOLS[1]) },
@@ -94,7 +95,7 @@ test('the model request forces a tool, adds say, and carries the key only in the
   const sent = JSON.parse(seen.init.body);
   assert.equal(sent.model, 'claude-test');
   assert.deepEqual(sent.tool_choice, { type: 'any' });
-  assert.deepEqual(sent.tools.map((t) => t.name), ['flashlight', 'time', 'say']);
+  assert.deepEqual(sent.tools.map((t) => t.name), ['flashlight', 'time', 'say', 'ask']);
   assert.ok(sent.messages[0].content.includes('<utterance>ঘরটা অন্ধকার</utterance>'));
   assert.ok(!seen.init.body.includes('sk-test'));
   assert.ok(!seen.init.body.includes('secret-token'));
@@ -174,4 +175,75 @@ test('agent mode needs the token too', async () => {
 test('a normal request still works exactly as before', async () => {
   const h = createHandler({ env: ENV, fetchImpl: claude([{ type: 'tool_use', name: 'time', input: {} }]) });
   assert.deepEqual((await call(h)).body, { steps: [{ intent: 'time', slots: {} }] });
+});
+
+// ---------------- understanding: context, questions, prompt rules ----------------
+
+test('what the phone just did is passed to the model, newest first', () => {
+  const sent = buildRequest({ ...BODY, text: 'ওটা বন্ধ করো', recent: ['wifi state=on', 'open_app app=youtube'] }, 'm');
+  const text = sent.messages[0].content;
+  assert.ok(text.includes('recent (newest first): wifi state=on | open_app app=youtube'));
+  assert.ok(text.includes('<utterance>ওটা বন্ধ করো</utterance>'));
+  assert.ok(buildRequest(BODY, 'm').messages[0].content.includes('recent: (nothing)'));
+});
+
+test('the first round may ask a question; the tool list says so', () => {
+  const sent = buildRequest(BODY, 'm');
+  assert.deepEqual(sent.tools.map((t) => t.name).slice(-2), ['say', 'ask']);
+  assert.deepEqual(sent.tool_choice, { type: 'any' });
+});
+
+test('after the user answered, the model cannot ask again: the ask tool is not offered at all', () => {
+  const body = { ...BODY, text: 'ওকে পাঠাও', clarify: { question: 'কাকে পাঠাব?', answer: 'রহিমকে' } };
+  const sent = buildRequest(body, 'm');
+  assert.ok(!sent.tools.some((t) => t.name === 'ask'));
+  const text = sent.messages[0].content;
+  assert.ok(text.includes('<utterance>ওকে পাঠাও</utterance>'));
+  assert.ok(text.includes('<question>কাকে পাঠাব?</question>'));
+  assert.ok(text.includes('<answer>রহিমকে</answer>'));
+  assert.ok(/may not ask again/.test(text));
+});
+
+test('a question comes back as ask, and never together with actions', async () => {
+  const h = createHandler({ env: ENV, fetchImpl: claude([
+    { type: 'tool_use', name: 'flashlight', input: { state: 'on' } },
+    { type: 'tool_use', name: 'ask', input: { question: ' কোনটা বন্ধ করব? ' } },
+    { type: 'tool_use', name: 'say', input: { text: 'ok' } },
+  ]) });
+  const r = await call(h);
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.body, { steps: [], ask: 'কোনটা বন্ধ করব?' });
+  assert.deepEqual(normalize({ content: [{ type: 'tool_use', name: 'ask', input: { question: '  ' } }] }), { steps: [] });
+});
+
+test('recent and clarify are checked before any model call', async () => {
+  let calls = 0;
+  const h = createHandler({ env: ENV, fetchImpl: async () => { calls++; return { ok: true, json: async () => ({}) }; } });
+  for (const extra of [
+    { recent: 'wifi' }, { recent: Array(6).fill('a') }, { recent: [1] }, { recent: ['x'.repeat(101)] },
+    { clarify: 'x' }, { clarify: { question: '', answer: 'a' } }, { clarify: { question: 'q', answer: ' ' } },
+    { clarify: { question: 'q'.repeat(201), answer: 'a' } }, { clarify: { question: 'q', answer: 'a'.repeat(301) } },
+  ]) {
+    assert.equal((await call(h, { body: { ...BODY, ...extra } })).code, 400, JSON.stringify(extra).slice(0, 60));
+  }
+  assert.equal(calls, 0);
+  assert.equal(checkBody({ ...BODY, recent: ['wifi state=on'], clarify: { question: 'কাকে?', answer: 'রহিমকে' } }), null);
+});
+
+test('the prompt keeps the rules that make answers precise', () => {
+  const p = buildRequest(BODY, 'm').system;
+  for (const must of [
+    'Never invent a phone number',
+    'never change names',
+    'Never claim you did something',
+    'you may not ask again',
+    'রাত ৯টা = 21',
+    'সাড়ে ৩টা = 3:30',
+    'Never add steps that were not asked for',
+  ]) assert.ok(p.includes(must), must);
+});
+
+test('agent mode never offers say or ask', () => {
+  const names = buildAgentRequest(AGENT, 'm').tools.map((t) => t.name);
+  assert.ok(!names.includes('say') && !names.includes('ask'));
 });

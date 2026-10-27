@@ -2,7 +2,9 @@ package com.buildx.ai.llm
 
 import com.buildx.ai.actions.ActionResult
 import com.buildx.ai.actions.Deferred
+import com.buildx.ai.actions.FollowUp
 import com.buildx.ai.nlu.Parsed
+import com.buildx.ai.nlu.Reply
 
 /** Asks the server. Blocking, so it is only ever called off the main thread. Never throws for a bad network. */
 interface LlmBackend {
@@ -17,6 +19,10 @@ interface LlmBackend {
  * pipeline, so confirmations, follow-up questions and chains behave exactly as for a spoken command) or a
  * short sentence to say. If the model, the network or the answer fails, the user hears what they heard
  * before this existed: "বুঝতে পারিনি".
+ *
+ * When one missing detail would make a wrong action likely, the model may ask ONE question instead of guessing:
+ * the question is spoken, the spoken answer starts a second round with the question and answer attached, and
+ * that round can only act or speak (the proxy does not even offer the ask tool). "থাক" / "না" drops it.
  *
  * No Android classes: [io] runs the blocking call, [main] hands the result back to the main thread.
  * Everything here except the blocking call happens on the main thread.
@@ -46,9 +52,27 @@ class LlmFallback(
         }
     }
 
-    fun resolve(text: String, lang: String, bn: Boolean, agent: Boolean = false, run: (List<Parsed>) -> ActionResult): ActionResult {
+    /** [recent]: name-free lines about what the phone just did (see ConversationMemory.safeSummary) */
+    fun resolve(
+        text: String,
+        lang: String,
+        bn: Boolean,
+        agent: Boolean = false,
+        recent: List<String> = emptyList(),
+        run: (List<Parsed>) -> ActionResult
+    ): ActionResult = round(text, lang, bn, agent, recent, null, run)
+
+    private fun round(
+        text: String,
+        lang: String,
+        bn: Boolean,
+        agent: Boolean,
+        recent: List<String>,
+        clarify: Pair<String, String>?,
+        run: (List<Parsed>) -> ActionResult
+    ): ActionResult {
         val pending = Pending()
-        val req = LlmRequest(text, lang, now(), agent)
+        val req = LlmRequest(text, lang, now(), agent, recent, clarify)
         io {
             val outcome = try {
                 backend.plan(req)
@@ -59,17 +83,39 @@ class LlmFallback(
         }
         return ActionResult(
             true, if (bn) "দেখছি" else "One moment",
-            deferred = Deferred { report -> pending.await { report(finish(it, text, bn, run)) } }
+            deferred = Deferred { report ->
+                pending.await { report(finish(it, text, lang, bn, agent, recent, clarify, run)) }
+            }
         )
     }
 
-    private fun finish(outcome: LlmOutcome, text: String, bn: Boolean, run: (List<Parsed>) -> ActionResult): ActionResult =
+    private fun finish(
+        outcome: LlmOutcome,
+        text: String,
+        lang: String,
+        bn: Boolean,
+        agent: Boolean,
+        recent: List<String>,
+        clarify: Pair<String, String>?,
+        run: (List<Parsed>) -> ActionResult
+    ): ActionResult =
         when (outcome) {
             is LlmOutcome.Planned -> {
                 val plan = outcome.plan
-                log("LLM \"$text\" -> ${plan.steps.joinToString(" | ") { "${it.intent} ${it.slots}" }}${if (plan.say != null) " say" else ""}")
-                // steps speak for themselves; a spoken answer is only used when there is nothing to do
-                if (plan.steps.isNotEmpty()) run(plan.steps) else ActionResult(true, plan.say.orEmpty())
+                val question = plan.ask
+                if (question != null) {
+                    log("LLM \"$text\" -> asks: $question")
+                    if (clarify != null) {
+                        // one question per request: a second one is only spoken, never answered
+                        ActionResult(true, question)
+                    } else {
+                        ActionResult(true, question, FollowUp { reply -> answered(text, lang, bn, agent, recent, question, reply, run) })
+                    }
+                } else {
+                    log("LLM \"$text\" -> ${plan.steps.joinToString(" | ") { "${it.intent} ${it.slots}" }}${if (plan.say != null) " say" else ""}")
+                    // steps speak for themselves; a spoken answer is only used when there is nothing to do
+                    if (plan.steps.isNotEmpty()) run(plan.steps) else ActionResult(true, plan.say.orEmpty())
+                }
             }
             is LlmOutcome.Failed -> {
                 log("LLM failed ${outcome.why} ${outcome.detail}")
@@ -82,4 +128,26 @@ class LlmFallback(
                 ActionResult(false, why + if (bn) "বুঝতে পারিনি: $text" else "I didn't understand: $text", unrecognized = true)
             }
         }
+
+    /** the user's spoken answer to the model's question: silence or a short "না" / "থাক" drops it, anything else is round two */
+    private fun answered(
+        text: String,
+        lang: String,
+        bn: Boolean,
+        agent: Boolean,
+        recent: List<String>,
+        question: String,
+        reply: String?,
+        run: (List<Parsed>) -> ActionResult
+    ): ActionResult {
+        val answer = reply?.trim().orEmpty()
+        if (answer.isEmpty()) return ActionResult(false, if (bn) "উত্তর পাইনি, করিনি" else "No answer, so I did nothing")
+        val short = answer.split(' ').count { it.isNotEmpty() } <= 2
+        if (short && Reply.yesNo(answer) == Reply.YesNo.NO) return ActionResult(true, if (bn) "ঠিক আছে, করিনি" else "Okay, not doing it")
+        return round(text, lang, bn, agent, recent, question to answer.take(MAX_ANSWER), run)
+    }
+
+    private companion object {
+        const val MAX_ANSWER = 300
+    }
 }

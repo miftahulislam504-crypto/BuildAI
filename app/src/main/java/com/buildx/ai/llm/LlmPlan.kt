@@ -6,11 +6,25 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** What goes to the server: the words the user said, never contacts or anything else from the phone. */
-data class LlmRequest(val text: String, val lang: String, val now: String, val agent: Boolean = false)
+/**
+ * What goes to the server: the words the user said, never contacts or anything else from the phone.
+ * [recent]: name-free lines about what the phone just did (newest first), so "ওটা বন্ধ করো" can be understood.
+ * [clarify]: second round only: the question the server asked and the user's spoken answer (question to answer).
+ */
+data class LlmRequest(
+    val text: String,
+    val lang: String,
+    val now: String,
+    val agent: Boolean = false,
+    val recent: List<String> = emptyList(),
+    val clarify: Pair<String, String>? = null
+)
 
-/** What the server decided: steps to run (in order) and/or something to say. */
-data class LlmPlan(val say: String?, val steps: List<Parsed>)
+/**
+ * What the server decided: steps to run (in order) and/or something to say.
+ * [ask]: instead of both, one short question for the user (the answer comes back as a second round).
+ */
+data class LlmPlan(val say: String?, val steps: List<Parsed>, val ask: String? = null)
 
 enum class Failure { NETWORK, TIMEOUT, AUTH, BUSY, SERVER, BAD_RESPONSE }
 
@@ -20,13 +34,16 @@ sealed class LlmOutcome {
 }
 
 object LlmRequestJson {
-    fun build(req: LlmRequest): String =
-        JSONObject()
+    fun build(req: LlmRequest): String {
+        val o = JSONObject()
             .put("text", req.text)
             .put("lang", req.lang)
             .put("now", req.now)
             .put("tools", LlmTools.toJson(req.agent))
-            .toString()
+        if (req.recent.isNotEmpty()) o.put("recent", JSONArray(req.recent))
+        req.clarify?.let { o.put("clarify", JSONObject().put("question", it.first).put("answer", it.second)) }
+        return o.toString()
+    }
 }
 
 /**
@@ -40,6 +57,7 @@ object LlmPlanParser {
     const val MAX_STEPS = 5
     private const val MAX_TEXT = 120
     private const val MAX_SAY = 400
+    private const val MAX_ASK = 200
 
     /** marks every step that came from the server (logged; also makes calls ask for confirmation) */
     const val VIA = "via"
@@ -64,6 +82,9 @@ object LlmPlanParser {
         } catch (e: JSONException) {
             return null
         }
+        // a question is never mixed with actions: nothing runs before the user has answered
+        val ask = (root.opt("ask") as? String)?.let { clean(it, MAX_ASK) }?.takeIf { it.isNotEmpty() }
+        if (ask != null) return LlmPlan(null, emptyList(), ask)
         val say = (root.opt("say") as? String)?.let { clean(it, MAX_SAY) }?.takeIf { it.isNotEmpty() }
         val raw = root.opt("steps")
         val arr = when (raw) {

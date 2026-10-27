@@ -213,4 +213,34 @@ class LlmPlanTest {
         Assert.assertEquals("send hi to Rahim", s[1].slots["goal"])
         Assert.assertNull(plan(steps(step("ui_task"))))
     }
+
+    // ----- asking back, and what context is sent -----
+
+    @Test fun aQuestionIsAPlanWithNoStepsEvenIfStepsCameWithIt() {
+        val torch = step("flashlight", """{"state":"on"}""")
+        val p = plan("""{"ask":"কাকে পাঠাব?","steps":[$torch]}""")!!
+        Assert.assertEquals("কাকে পাঠাব?", p.ask)
+        Assert.assertTrue(p.steps.isEmpty())
+        Assert.assertNull(p.say)
+    }
+
+    @Test fun anEmptyQuestionIsNotAQuestion() {
+        Assert.assertNull(plan("""{"ask":"  ","say":"ঠিক আছে","steps":[]}""")!!.ask)
+        Assert.assertNull(plan("""{"ask":"  ","steps":[]}"""))
+    }
+
+    @Test fun recentAndClarifyAreSentOnlyWhenPresent() {
+        val plain = JSONObject(LlmRequestJson.build(LlmRequest(said, "bn-BD", "now")))
+        Assert.assertFalse(plain.has("recent"))
+        Assert.assertFalse(plain.has("clarify"))
+
+        val full = JSONObject(
+            LlmRequestJson.build(
+                LlmRequest(said, "bn-BD", "now", recent = listOf("wifi state=on"), clarify = "কাকে?" to "রহিমকে")
+            )
+        )
+        Assert.assertEquals("wifi state=on", full.getJSONArray("recent").getString(0))
+        Assert.assertEquals("কাকে?", full.getJSONObject("clarify").getString("question"))
+        Assert.assertEquals("রহিমকে", full.getJSONObject("clarify").getString("answer"))
+    }
 }

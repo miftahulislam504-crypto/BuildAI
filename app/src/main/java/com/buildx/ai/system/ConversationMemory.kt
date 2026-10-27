@@ -31,6 +31,9 @@ class ConversationMemory(
         /** things that are switched on and off */
         val toggleIntents = setOf("wifi", "bluetooth", "flashlight", "dnd", "airplane", "mobile_data", "hotspot")
 
+        /** slots that say how, never who or what was written */
+        private val safeSlots = setOf("state", "action", "level", "delta", "app", "mode", "feed", "dir", "camera", "when", "hour", "minute", "in_minutes")
+
         /** not worth repeating or remembering */
         private val skip = setOf("unknown", "cancel", "echo", "routine")
     }
@@ -58,6 +61,27 @@ class ConversationMemory(
     fun lastContact(): Step? = if (fresh(contactAt)) contact else null
     fun lastToggle(): Step? = if (fresh(toggleAt)) toggle else null
     fun lastOpened(): Step? = if (fresh(openedAt)) opened else null
+
+    /**
+     * What was just done, newest first, as short lines for the server ("wifi state=off"): so "ওটা আবার চালু করো" can be
+     * understood there. Only slots that name no person and carry no text (no target, number, message, search or note);
+     * each line is short enough for the proxy's limit.
+     */
+    fun safeSummary(max: Int = 3): List<String> {
+        val items = ArrayList<Pair<Long, Step>>()
+        val l = last
+        val t = toggle
+        val o = opened
+        if (l != null && fresh(lastAt)) items.add(lastAt to l)
+        if (t != null && fresh(toggleAt)) items.add(toggleAt to t)
+        if (o != null && fresh(openedAt)) items.add(openedAt to o)
+        return items.sortedByDescending { it.first }.map { describe(it.second) }.distinct().take(max)
+    }
+
+    private fun describe(s: Step): String {
+        val parts = s.slots.filterKeys { it in safeSlots }.entries.joinToString(" ") { "${it.key}=${it.value.take(30)}" }
+        return (if (parts.isEmpty()) s.intent else "${s.intent} $parts").take(100)
+    }
 
     fun clear() {
         last = null; contact = null; toggle = null; opened = null; lastText = null

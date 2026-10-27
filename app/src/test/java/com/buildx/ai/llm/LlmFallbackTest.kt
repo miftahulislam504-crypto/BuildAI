@@ -163,4 +163,96 @@ class LlmFallbackTest {
         loop.drain()
         Assert.assertTrue(log.single().contains("flashlight"))
     }
+
+    // ----- asking one question back -----
+
+    private fun asking(q: String) = LlmOutcome.Planned(LlmPlan(null, emptyList(), q))
+
+    @Test fun theRecentLinesGoToTheServer() {
+        val loop = Loop()
+        val b = FakeBackend { planned("x") }
+        fallback(loop, b).resolve(said, "bn-BD", true, recent = listOf("wifi state=on")) { ActionResult(true, "ran") }
+        loop.ioQueue.removeAt(0)()
+        Assert.assertEquals(listOf("wifi state=on"), b.lastRequest!!.recent)
+        Assert.assertNull(b.lastRequest!!.clarify)
+    }
+
+    @Test fun aQuestionIsSpokenAndTheAnswerStartsASecondRoundWithBoth() {
+        val loop = Loop()
+        val rep = Reports()
+        var ran: List<Parsed>? = null
+        // the fake answers by call count: first a question, then steps
+        var n = 0
+        val backend = FakeBackend { n++; if (n == 1) asking("কাকে পাঠাব?") else planned(null, "send_sms") }
+        val r = fallback(loop, backend).resolve(said, "bn-BD", true) { ran = it; ActionResult(true, "পাঠানো হয়েছে") }
+        r.deferred!!.run(rep.report)
+        loop.drain()
+        val question = rep.got.single()
+        Assert.assertEquals("কাকে পাঠাব?", question.message)
+        Assert.assertNotNull(question.followUp)
+        Assert.assertNull("nothing runs before the answer", ran)
+
+        val second = question.followUp!!.onReply("রহিমকে")
+        Assert.assertEquals("দেখছি", second.message)
+        val rep2 = Reports()
+        second.deferred!!.run(rep2.report)
+        loop.drain()
+        Assert.assertEquals(2, backend.calls)
+        Assert.assertEquals("কাকে পাঠাব?" to "রহিমকে", backend.lastRequest!!.clarify)
+        Assert.assertEquals(said, backend.lastRequest!!.text)
+        Assert.assertEquals(listOf("send_sms"), ran!!.map { it.intent })
+        Assert.assertEquals("পাঠানো হয়েছে", rep2.got.single().message)
+    }
+
+    @Test fun aSecondQuestionIsOnlySpokenNeverAnswered() {
+        val loop = Loop()
+        var n = 0
+        val backend = FakeBackend { n++; asking("আরেকটা প্রশ্ন $n") }
+        val rep = Reports()
+        fallback(loop, backend).resolve(said, "bn-BD", true) { ActionResult(true, "") }.deferred!!.run(rep.report)
+        loop.drain()
+        val second = rep.got.single().followUp!!.onReply("রহিমকে")
+        val rep2 = Reports()
+        second.deferred!!.run(rep2.report)
+        loop.drain()
+        Assert.assertNull(rep2.got.single().followUp)
+        Assert.assertEquals(2, backend.calls)
+    }
+
+    @Test fun noOrNeverMindDropsTheQuestionWithoutAnotherServerCall() {
+        for (reply in listOf("না", "থাক", "no")) {
+            val loop = Loop()
+            val backend = FakeBackend { asking("কাকে পাঠাব?") }
+            val rep = Reports()
+            fallback(loop, backend).resolve(said, "bn-BD", true) { ActionResult(true, "") }.deferred!!.run(rep.report)
+            loop.drain()
+            val next = rep.got.single().followUp!!.onReply(reply)
+            Assert.assertNull(next.deferred)
+            Assert.assertEquals("ঠিক আছে, করিনি", next.message)
+            Assert.assertEquals(1, backend.calls)
+        }
+    }
+
+    @Test fun silenceDropsTheQuestionToo() {
+        val loop = Loop()
+        val backend = FakeBackend { asking("কাকে পাঠাব?") }
+        val rep = Reports()
+        fallback(loop, backend).resolve(said, "bn-BD", true) { ActionResult(true, "") }.deferred!!.run(rep.report)
+        loop.drain()
+        val next = rep.got.single().followUp!!.onReply(null)
+        Assert.assertFalse(next.success)
+        Assert.assertNull(next.deferred)
+        Assert.assertEquals(1, backend.calls)
+    }
+
+    @Test fun aLongAnswerIsCappedBeforeItIsSent() {
+        val loop = Loop()
+        val backend = FakeBackend { asking("কাকে?") }
+        val rep = Reports()
+        fallback(loop, backend).resolve(said, "bn-BD", true) { ActionResult(true, "") }.deferred!!.run(rep.report)
+        loop.drain()
+        rep.got.single().followUp!!.onReply("ক".repeat(1000))
+        loop.ioQueue.removeAt(0)()
+        Assert.assertEquals(300, backend.lastRequest!!.clarify!!.second.length)
+    }
 }

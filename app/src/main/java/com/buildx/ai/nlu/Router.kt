@@ -37,7 +37,7 @@ object CommandPipeline {
             val llm = AndroidLlm.fallback(ac.context)
             if (llm != null) {
                 LogStore.add(ac.context, "LLM \"$text\" -> not understood offline, asking the server")
-                return llm.resolve(text, ac.lang, ac.bn, AndroidLlm.agentOn(ac.context)) { planned -> runSteps(ac, planned, text) }
+                return llm.resolve(text, ac.lang, ac.bn, AndroidLlm.agentOn(ac.context), ConversationMemory.shared.safeSummary()) { planned -> runSteps(ac, planned, text) }
             }
         }
         return runSteps(ac, steps, text)
