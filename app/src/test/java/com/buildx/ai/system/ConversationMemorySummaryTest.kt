@@ -30,9 +30,11 @@ class ConversationMemorySummaryTest {
     @Test fun searchesAndNotesStayOnThePhone() {
         val m = mem()
         now = 1000; m.record("web_search", mapOf("query" to "আমার অসুখ"))
+        Assert.assertEquals(listOf("web_search"), m.safeSummary())
         now = 2000; m.record("note", mapOf("op" to "add", "text" to "গোপন কথা"))
-        val s = m.safeSummary()
-        Assert.assertEquals(listOf("note", "web_search"), s)
+        val s = m.safeSummary() // only the newest step is remembered; the search is gone
+        Assert.assertEquals(listOf("note"), s)
+        Assert.assertTrue(s.none { it.contains("গোপন") || it.contains("অসুখ") })
     }
 
     @Test fun oldThingsAreForgottenAndEveryLineFitsTheProxyLimit() {
